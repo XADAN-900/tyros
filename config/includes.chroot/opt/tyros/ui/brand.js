@@ -227,3 +227,209 @@ document.addEventListener('load', e => {
   if (e.target.tagName !== 'IFRAME') return;
   try { e.target.contentWindow.addEventListener('contextmenu', ev => ev.preventDefault()); } catch { /* başka kaynak */ }
 }, true);
+
+/* ------------------------------------------------------------ duvar kağıtları
+   Derleme sırasında üretilen yüksek çözünürlüklü resimler (tools/wallpapers.py). */
+for (const k of Object.keys(WALLPAPERS)) delete WALLPAPERS[k];
+[['tyros', 'TyrOS'], ['akis', 'Akış'], ['kuzey', 'Kuzey ışıkları'], ['kum', 'Kum tepeleri'], ['okyanus', 'Okyanus']]
+  .forEach(([id, name]) => { WALLPAPERS[id] = { name, img: `img/wall/${id}.jpg` }; });
+function wallpaperSVG(id) {
+  const w = WALLPAPERS[id] || WALLPAPERS.tyros;
+  return `<svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><image href="${w.img}" width="1600" height="900" preserveAspectRatio="xMidYMid slice"/></svg>`;
+}
+
+/* ------------------------------------------------------------ çöp kutusu */
+ICONS.trashfull = ICONS.trash + '<path d="M9.5 4.5l1-1.5h3l1 1.5" stroke-opacity=".6"/><circle cx="12" cy="14" r="1.2" fill="currentColor"/>';
+const q = s => `'${String(s).replace(/'/g, `'\\''`)}'`;          // kabuk için güvenli tırnak
+const TRASH = '~/.local/share/Trash';
+const sh = async (cmd, timeout = 120) => {
+  const r = await API.post('/api/exec', { cmd, timeout });
+  if (r.code !== 0) throw new Error((r.stderr || r.stdout || 'İşlem başarısız').trim());
+  return r.stdout;
+};
+const Trash = {
+  count: 0,
+  listeners: new Set(),
+  changed() { this.refreshCount(); refreshFileWindows(); this.listeners.forEach(fn => fn()); },
+  async refreshCount() {
+    try { this.count = parseInt(await sh(`ls -A ${TRASH}/files 2>/dev/null | wc -l`), 10) || 0; } catch { this.count = 0; }
+    $$('.dicon.trash').forEach(el => { el.querySelector('.ico').replaceWith(appIcon(trashApp())); });
+  },
+  /** Dosyaları çöpe taşır (orijinal konumu kaydedilir, geri yüklenebilir) */
+  async put(paths, silent = false) {
+    if (!paths.length) return;
+    const hasGio = (await sh('command -v gio >/dev/null && echo var || true')).trim() === 'var';
+    if (hasGio) await sh(`gio trash -- ${paths.map(q).join(' ')}`);
+    else for (const p of paths) await API.call('/api/fileop', { op: 'trash', path: p }, 'POST');
+    if (!silent) notify('Çöpe taşındı', paths.length === 1 ? paths[0].split('/').pop() : `${paths.length} öğe`);
+    this.changed();
+  },
+  async list() {
+    const py = `import os, json, urllib.parse
+b = os.path.expanduser('~/.local/share/Trash'); out = []
+for n in sorted(os.listdir(b + '/files')) if os.path.isdir(b + '/files') else []:
+    p = b + '/files/' + n; orig = date = ''
+    try:
+        for line in open(b + '/info/' + n + '.trashinfo', encoding='utf-8', errors='replace'):
+            if line.startswith('Path='): orig = urllib.parse.unquote(line[5:].strip())
+            elif line.startswith('DeletionDate='): date = line[13:].strip()
+    except OSError: pass
+    st = os.lstat(p); out.append(dict(name=n, dir=os.path.isdir(p), size=st.st_size, orig=orig, date=date))
+print(json.dumps(out))`;
+    return JSON.parse(await sh(`python3 - <<'PY'\n${py}\nPY`));
+  },
+  async restore(item) {
+    if (!item.orig) throw new Error('Bu öğenin eski konumu bilinmiyor. Dosyalar > Çöp klasöründen elle taşıyabilirsin.');
+    await sh(`dest=${q(item.orig)}; if [ -e "$dest" ]; then echo "Bu konumda aynı adlı bir öğe zaten var" >&2; exit 1; fi
+mkdir -p "$(dirname "$dest")" && mv -- ${TRASH}/files/${q(item.name)} "$dest" && rm -f -- ${TRASH}/info/${q(item.name + '.trashinfo')}`);
+    notify('Geri yüklendi', item.orig); this.changed();
+  },
+  async remove(item) {
+    if (item.name.includes('/')) return;
+    await sh(`rm -rf -- ${TRASH}/files/${q(item.name)} ${TRASH}/info/${q(item.name + '.trashinfo')}`, 600);
+    notify('Kalıcı olarak silindi', item.name); this.changed();
+  },
+  async empty() {
+    await sh(`mkdir -p ${TRASH}/files ${TRASH}/info; find ${TRASH}/files ${TRASH}/info -mindepth 1 -delete`, 600);
+    notify('Çöp boşaltıldı'); this.changed();
+  },
+};
+function refreshFileWindows() {
+  $$('.win .fm button[title="Yenile"]').forEach(b => b.click());
+}
+const trashApp = () => ({ id: 'trash', name: 'Çöp', glyph: Trash.count ? 'trashfull' : 'trash', tile: '#3a4250', builtin: true });
+
+/** Sürüklenen öğeyi bir yere bırakılabilir yapar (çöp simgesi, çöp penceresi) */
+function makeTrashDrop(el) {
+  el.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('text/tyros-path')) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.classList.add('drop-hover'); } });
+  el.addEventListener('dragleave', () => el.classList.remove('drop-hover'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('drop-hover');
+    const paths = (e.dataTransfer.getData('text/tyros-path') || '').split('\n').filter(Boolean);
+    Trash.put(paths).catch(fail);
+  });
+}
+
+BUILTIN.trash = {
+  id: 'trash', name: 'Çöp', glyph: 'trash', tile: '#3a4250', cats: ['System'], comment: 'Silinen dosyalar', builtin: true,
+  launch() {
+    const list = h('div', { class: 'tr-list' });
+    const info = h('span', { class: 'muted', style: { fontSize: '12.5px', marginLeft: 'auto' } });
+    const emptyBtn = h('button', { class: 'btn danger', html: svgIcon('trash') + 'Çöpü boşalt', onclick: async () => {
+      if (await tyrosConfirm('Çöpteki her şey kalıcı olarak silinecek. Bu işlem geri alınamaz.', { title: 'Çöp boşaltılsın mı?', ok: 'Boşalt', danger: true })) Trash.empty().catch(fail);
+    } });
+    const root = h('div', { class: 'tr' }, h('div', { class: 'toolbar' }, emptyBtn, info), list);
+    const win = WM.open({ app: BUILTIN.trash, width: 720, height: 480, content: root, single: true });
+    makeTrashDrop(root);
+    const render = async () => {
+      let items = [];
+      try { items = await Trash.list(); } catch (e) { list.replaceChildren(h('div', { class: 'empty' }, e.message)); return; }
+      emptyBtn.disabled = !items.length;
+      info.textContent = items.length ? `${items.length} öğe` : '';
+      if (!items.length) {
+        list.replaceChildren(h('div', { class: 'empty tr-empty' }, h('span', { class: 'ico', html: svgIcon('trash') }), h('div', {}, 'Çöp boş'),
+          h('div', { class: 'muted', style: { fontSize: '12.5px' } }, 'Dosyaları buraya ya da masaüstündeki çöp simgesine sürükleyerek silebilirsin.')));
+        return;
+      }
+      list.replaceChildren(...items.map(it => {
+        const when = it.date ? new Date(it.date).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+        const row = h('div', { class: 'tr-row' },
+          appIcon({ glyph: it.dir ? 'folder' : 'file', tile: it.dir ? '#34586c' : '#3a424d' }),
+          h('div', { class: 'tr-info' }, h('div', { class: 'tr-name' }, it.name),
+            h('div', { class: 'muted tr-sub' }, [it.orig ? it.orig.replace(/\/[^/]*$/, '') || '/' : 'Konum bilinmiyor', when, it.dir ? '' : fmtBytes(it.size)].filter(Boolean).join(' · '))),
+          h('button', { class: 'btn', disabled: !it.orig, title: it.orig ? `${it.orig} konumuna geri taşı` : 'Eski konum bilinmiyor', onclick: () => Trash.restore(it).catch(fail) }, 'Geri yükle'),
+          h('button', { class: 'btn danger', onclick: async () => {
+            if (await tyrosConfirm(`"${it.name}" kalıcı olarak silinecek. Bu işlem geri alınamaz.`, { title: 'Kalıcı olarak silinsin mi?', ok: 'Sil', danger: true })) Trash.remove(it).catch(fail);
+          } }, 'Kalıcı sil'));
+        row.addEventListener('contextmenu', e => {
+          e.preventDefault();
+          Shell.contextMenu(e.clientX, e.clientY, [
+            it.orig && ['Geri yükle', () => Trash.restore(it).catch(fail)],
+            ['Kalıcı olarak sil', async () => { if (await tyrosConfirm(`"${it.name}" kalıcı olarak silinecek.`, { title: 'Kalıcı olarak silinsin mi?', ok: 'Sil', danger: true })) Trash.remove(it).catch(fail); }],
+          ]);
+        });
+        return row;
+      }));
+    };
+    Trash.listeners.add(render);
+    win.onClose = () => { Trash.listeners.delete(render); return true; };
+    render();
+  },
+};
+
+/* Dosyalar penceresindeki öğeler sürüklenebilsin (çöpe atmak için) */
+new MutationObserver(() => {
+  $$('.fm-item:not([draggable])').forEach(el => {
+    el.draggable = true;
+    el.addEventListener('dragstart', e => {
+      const dir = el.closest('.fm')?.querySelector('.fm-path')?.value;
+      if (!dir) return e.preventDefault();
+      e.dataTransfer.setData('text/tyros-path', (dir === '/' ? '' : dir) + '/' + el.title);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+  });
+}).observe(document.documentElement, { childList: true, subtree: true });
+
+/* Dosyalar uygulamasındaki "Çöpe taşı" da geri yüklenebilir çöpü kullansın */
+const _apiPost = API.post.bind(API);
+API.post = function (path, body) {
+  if (path === '/api/fileop' && body?.op === 'trash') return Trash.put([body.path], true).then(() => ({ ok: true }));
+  return _apiPost(path, body);
+};
+
+/* ------------------------------------------------------------ masaüstü: çöp + Masaüstü klasörü */
+let DESKTOP_DIR = null, desktopSig = '';
+async function desktopFiles() {
+  try {
+    if (!DESKTOP_DIR) DESKTOP_DIR = ((await API.get('/api/places')).find(p => p.name === 'Masaüstü') || {}).path || null;
+    if (!DESKTOP_DIR) return [];
+    return (await API.get('/api/files?path=' + encodeURIComponent(DESKTOP_DIR))).items.filter(i => !i.name.startsWith('.') && !i.name.endsWith('.desktop'));
+  } catch { return []; }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const renderDesktop = Shell.renderDesktop.bind(Shell);
+  Shell.renderDesktop = async function () {
+    renderDesktop();
+    const box = $('#desktopIcons');
+    const select = b => { $$('.dicon.sel').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); };
+    // Çöp
+    const t = h('button', { class: 'dicon trash', title: 'Çöp — dosyaları buraya sürükle' }, appIcon(trashApp()), h('span', {}, 'Çöp'));
+    t.addEventListener('click', () => select(t));
+    t.addEventListener('dblclick', () => BUILTIN.trash.launch());
+    t.addEventListener('keydown', e => e.key === 'Enter' && BUILTIN.trash.launch());
+    t.addEventListener('contextmenu', e => {
+      e.preventDefault(); e.stopPropagation();
+      this.contextMenu(e.clientX, e.clientY, [['Çöpü aç', () => BUILTIN.trash.launch()], '-',
+        ['Çöpü boşalt', async () => { if (await tyrosConfirm('Çöpteki her şey kalıcı olarak silinecek.', { title: 'Çöp boşaltılsın mı?', ok: 'Boşalt', danger: true })) Trash.empty().catch(fail); }]]);
+    });
+    makeTrashDrop(t);
+    box.append(t);
+    Trash.refreshCount();
+    // Masaüstü klasöründeki dosyalar
+    const files = await desktopFiles();
+    desktopSig = JSON.stringify(files.map(f => f.name + f.mtime));
+    for (const it of files) {
+      const full = DESKTOP_DIR + '/' + it.name;
+      const glyph = it.dir ? 'folder' : /\.(png|jpe?g|gif|webp|svg)$/i.test(it.name) ? 'image' : 'file';
+      const b = h('button', { class: 'dicon', title: it.name, draggable: 'true' }, appIcon({ glyph, tile: it.dir ? '#34586c' : '#3a424d' }), h('span', {}, it.name));
+      const open = () => it.dir ? BUILTIN.files.launch(full) : API.post('/api/open', { path: full }).catch(fail);
+      b.addEventListener('click', () => select(b));
+      b.addEventListener('dblclick', open);
+      b.addEventListener('keydown', e => { if (e.key === 'Enter') open(); if (e.key === 'Delete') Trash.put([full]).catch(fail); });
+      b.addEventListener('dragstart', e => { e.dataTransfer.setData('text/tyros-path', full); e.dataTransfer.effectAllowed = 'move'; });
+      b.addEventListener('contextmenu', e => {
+        e.preventDefault(); e.stopPropagation(); select(b);
+        this.contextMenu(e.clientX, e.clientY, [['Aç', open], '-', ['Çöpe taşı', () => Trash.put([full]).catch(fail)]]);
+      });
+      box.append(b);
+    }
+  };
+  // Masaüstü klasörü değişirse simgeleri yenile; çöp değişince de
+  Trash.listeners.add(() => Shell.renderDesktop());
+  setInterval(async () => {
+    if (!API.online) return;
+    const sig = JSON.stringify((await desktopFiles()).map(f => f.name + f.mtime));
+    if (sig !== desktopSig) Shell.renderDesktop();
+  }, 4000);
+});

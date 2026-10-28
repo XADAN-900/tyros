@@ -51,3 +51,18 @@ html, body, #boot { background: #0b1220; }
   background: #0b1220; color: var(--mist); font-size: 14px; animation: ty-fade .3s ease-out;
 }
 .ty-power img { width: 120px; height: 120px; object-fit: contain; animation: logo-breathe 2s ease-in-out infinite; }
+
+/* Çöp */
+.dicon.drop-hover, .tr.drop-hover { background: color-mix(in srgb, var(--danger) 22%, transparent) !important; border-color: var(--danger) !important; }
+.dicon.trash .app-tile { --tile: #3a4250; }
+.tr { display: flex; flex-direction: column; height: 100%; border: 2px dashed transparent; }
+.tr-list { flex: 1; overflow: auto; }
+.tr-row { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-bottom: 1px solid #262d36; }
+.tr-row:hover { background: var(--stone-2); }
+.tr-row .ico { width: 30px; height: 30px; }
+.tr-info { flex: 1; min-width: 0; }
+.tr-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr-sub { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr-empty { display: grid; justify-items: center; gap: 8px; padding-top: 70px; }
+.tr-empty .ico { width: 54px; height: 54px; color: var(--mist); opacity: .6; }
+.fm-item[draggable="true"] { -webkit-user-drag: element; }
