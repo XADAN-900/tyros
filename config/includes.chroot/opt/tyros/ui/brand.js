@@ -198,3 +198,32 @@ window.addEventListener('DOMContentLoaded', () => {
     } catch (e) { $('.ty-power')?.remove(); fail(e); }
   };
 });
+
+/* ------------------------------------------------------------ sağ tık
+   Chromium'un kendi (Google) sağ tık menüsü hiçbir yerde çıkmasın.
+   Yazı alanlarında ve seçili metinde TyrOS'un kendi menüsü açılır. */
+window.addEventListener('contextmenu', e => {
+  if (e.defaultPrevented) return;          // uygulama kendi menüsünü açtı
+  e.preventDefault();
+  const field = e.target.closest?.('input:not([type=range]):not([type=checkbox]), textarea, [contenteditable="true"]');
+  const selected = String(window.getSelection?.() || '');
+  if (!field && !selected) return;
+  const focusBack = () => field?.focus();
+  const items = [];
+  if (field) items.push(['Kes', () => { focusBack(); document.execCommand('cut'); }]);
+  items.push(['Kopyala', () => { focusBack(); document.execCommand('copy'); }]);
+  if (field) {
+    items.push(['Yapıştır', async () => {
+      focusBack();
+      try { document.execCommand('insertText', false, await navigator.clipboard.readText()); } catch { /* pano boş */ }
+    }]);
+    items.push('-', ['Tümünü seç', () => { focusBack(); field.select ? field.select() : document.execCommand('selectAll'); }]);
+  }
+  Shell.contextMenu(e.clientX, e.clientY, items);
+});
+
+// Terminal gibi pencere içi sayfalarda da tarayıcı menüsünü kapat
+document.addEventListener('load', e => {
+  if (e.target.tagName !== 'IFRAME') return;
+  try { e.target.contentWindow.addEventListener('contextmenu', ev => ev.preventDefault()); } catch { /* başka kaynak */ }
+}, true);

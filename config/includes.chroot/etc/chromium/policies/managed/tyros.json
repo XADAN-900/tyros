@@ -18,5 +18,9 @@
   "PrivacySandboxAdMeasurementEnabled": false,
   "AutofillAddressEnabled": false,
   "AutofillCreditCardEnabled": false,
-  "HideWebStoreIcon": true
+  "HideWebStoreIcon": true,
+  "ClipboardAllowedForUrls": [
+    "http://127.0.0.1",
+    "http://localhost"
+  ]
 }
