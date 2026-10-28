@@ -2,7 +2,7 @@
 import math, random
 from PIL import Image, ImageDraw, ImageFilter, ImageChops
 
-K = 2                     # çizim doğrudan tam çözünürlükte (2560x1440) yapılır
+K = 3                     # çizim doğrudan 4K (3840x2160) çözünürlükte yapılır
 W, H = 1280 * K, 720 * K
 OUT_W, OUT_H = W, H
 
@@ -28,7 +28,9 @@ def stars(img, n, seed, ymax=1.0, bright=200):
         d.ellipse([x - s, y - s, x + s, y + s], fill=(b, b, min(255, b + 15)))
     return img
 
-def finish(img, grain=3, seed=1):
+def finish(img, grain=2, seed=1):
+    if not grain:
+        return img if img.size == (OUT_W, OUT_H) else img.resize((OUT_W, OUT_H), Image.LANCZOS)
     big = img if img.size == (OUT_W, OUT_H) else img.resize((OUT_W, OUT_H), Image.LANCZOS)
     noise = Image.effect_noise((OUT_W, OUT_H), 64).convert('RGB')
     noise = Image.eval(noise, lambda v: 128 + (v - 128) * grain // 64)
@@ -157,5 +159,5 @@ def build(logo, outdir):
     os.makedirs(outdir, exist_ok=True)
     for key, _name, fn in WALLS:
         img = finish(fn(logo))
-        img.save(os.path.join(outdir, f'{key}.jpg'), quality=93, subsampling=0, optimize=True, progressive=True)
-        img.resize((320, 180), Image.LANCZOS).save(os.path.join(outdir, f'{key}-k.jpg'), quality=85)
+        img.save(os.path.join(outdir, f'{key}.jpg'), quality=95, subsampling=0, optimize=True, progressive=True)
+        img.resize((480, 270), Image.LANCZOS).save(os.path.join(outdir, f'{key}-k.jpg'), quality=88)
