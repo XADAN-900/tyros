@@ -149,3 +149,7 @@ html, body, #boot { background: #0b1220; }
 .sto-more { display: block; margin: 14px auto 0; }
 .sto-more[hidden] { display: none; }
 .sto-card > .ico, .sto-card .app-tile { font-size: 40px; }
+
+/* Masaüstü simgeleri: serbest yerleşim (ızgaraya oturur) */
+#desktopIcons { display: block !important; right: 14px; pointer-events: none; }
+#desktopIcons .dicon { position: absolute; pointer-events: auto; transition: left .12s ease, top .12s ease; }

@@ -127,7 +127,7 @@ window.addEventListener('DOMContentLoaded', () => {
   Shell.renderDesktop = function () {
     renderDesktop();
     if (!TYROS_LIVE) return;
-    const b = h('button', { class: 'dicon' }, appIcon(INSTALLER), h('span', {}, INSTALLER.name));
+    const b = h('button', { class: 'dicon installer' }, appIcon(INSTALLER), h('span', {}, INSTALLER.name));
     b.addEventListener('click', () => { $$('.dicon.sel').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); });
     b.addEventListener('dblclick', () => this.launch(INSTALLER));
     b.addEventListener('keydown', e => e.key === 'Enter' && this.launch(INSTALLER));
@@ -306,6 +306,8 @@ function makeTrashDrop(el) {
   el.addEventListener('drop', e => {
     e.preventDefault(); el.classList.remove('drop-hover');
     const paths = (e.dataTransfer.getData('text/tyros-path') || '').split('\n').filter(Boolean);
+    if (!paths.length) return;
+    e.stopPropagation();
     Trash.put(paths).catch(fail);
   });
 }
@@ -389,7 +391,9 @@ async function desktopFiles() {
 
 window.addEventListener('DOMContentLoaded', () => {
   const renderDesktop = Shell.renderDesktop.bind(Shell);
+  let renderGen = 0;
   Shell.renderDesktop = async function () {
+    const gen = ++renderGen;
     renderDesktop();
     const box = $('#desktopIcons');
     const select = b => { $$('.dicon.sel').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); };
@@ -404,15 +408,18 @@ window.addEventListener('DOMContentLoaded', () => {
         ['Çöpü boşalt', async () => { if (await tyrosConfirm('Çöpteki her şey kalıcı olarak silinecek.', { title: 'Çöp boşaltılsın mı?', ok: 'Boşalt', danger: true })) Trash.empty().catch(fail); }]]);
     });
     makeTrashDrop(t);
-    box.append(t);
+    // Çöp, "Diske Kur" simgesinin üstünde dursun
+    const inst = box.querySelector('.dicon.installer');
+    if (inst) box.insertBefore(t, inst); else box.append(t);
     Trash.refreshCount();
     // Masaüstü klasöründeki dosyalar
     const files = await desktopFiles();
+    if (gen !== renderGen) return;   // bu arada yeniden çizildiyse çift simge oluşmasın
     desktopSig = JSON.stringify(files.map(f => f.name + f.mtime));
     for (const it of files) {
       const full = DESKTOP_DIR + '/' + it.name;
       const glyph = it.dir ? 'folder' : /\.(png|jpe?g|gif|webp|svg)$/i.test(it.name) ? 'image' : 'file';
-      const b = h('button', { class: 'dicon', title: it.name, draggable: 'true' }, appIcon({ glyph, tile: it.dir ? '#34586c' : '#3a424d' }), h('span', {}, it.name));
+      const b = h('button', { class: 'dicon dfile', title: it.name, draggable: 'true' }, appIcon({ glyph, tile: it.dir ? '#34586c' : '#3a424d' }), h('span', {}, it.name));
       const open = () => it.dir ? BUILTIN.files.launch(full) : API.post('/api/open', { path: full }).catch(fail);
       b.addEventListener('click', () => select(b));
       b.addEventListener('dblclick', open);
@@ -487,12 +494,12 @@ function selectedPaths(from) {
     const dir = fm.querySelector('.fm-path')?.value;
     return dir ? $$('.fm-item.sel', fm).map(i => (dir === '/' ? '' : dir) + '/' + i.title) : [];
   }
-  return DESKTOP_DIR ? $$('#desktopIcons .dicon.sel[draggable="true"]').map(d => DESKTOP_DIR + '/' + d.title) : [];
+  return DESKTOP_DIR ? $$('#desktopIcons .dicon.dfile.sel').map(d => DESKTOP_DIR + '/' + d.title) : [];
 }
 
 // Birden çok seçili öğeyi birlikte sürükle
 document.addEventListener('dragstart', e => {
-  const icon = e.target.closest?.('.dicon[draggable="true"], .fm-item');
+  const icon = e.target.closest?.('.dicon.dfile, .fm-item');
   if (!icon || !icon.classList.contains('sel')) return;
   const paths = selectedPaths(icon);
   if (paths.length > 1) e.dataTransfer.setData('text/tyros-path', paths.join('\n'));

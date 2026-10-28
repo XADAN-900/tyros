@@ -29,6 +29,7 @@ const Prefs = {
     const d = Settings.data;
     document.documentElement.style.zoom = d.uiScale && d.uiScale !== 1 ? d.uiScale : '';
     document.documentElement.classList.toggle('ty-noanim', !!d.reduceMotion);
+    if ($('#desktopIcons .dicon')) layoutDesktop();
   },
   async applySystem() {
     const d = Settings.data;
@@ -525,4 +526,100 @@ BUILTIN.store.launch = () => {
 
   show('home');
 };
+
+/* ================================================================ MASAÜSTÜ: simgeleri sürükleyip taşıma
+   Simgeler bir ızgaraya oturur; sürükleyip bırakılan yer hatırlanır (Settings.iconPos). */
+const CELL_W = 96, CELL_H = 104;
+const iconKey = b => b.classList.contains('trash') ? 'trash' : b.classList.contains('installer') ? 'install'
+  : b.classList.contains('dfile') ? 'f:' + b.title : 'a:' + (b.lastElementChild?.textContent || '');
+function gridSize() {
+  const box = $('#desktopIcons');
+  const r = box.getBoundingClientRect();
+  return { box, rect: r, cols: Math.max(1, Math.floor(r.width / CELL_W)), rows: Math.max(1, Math.floor(r.height / CELL_H)) };
+}
+function layoutDesktop() {
+  const g = gridSize();
+  if (!g.box) return;
+  const saved = Settings.data.iconPos || {};
+  const icons = $$('.dicon', g.box);
+  const used = new Set();
+  const place = (b, c, r) => { used.add(c + ',' + r); b.dataset.cell = c + ',' + r; b.style.left = c * CELL_W + 'px'; b.style.top = r * CELL_H + 'px'; };
+  const rest = [];
+  for (const b of icons) {
+    b.dataset.key = iconKey(b);
+    const p = saved[b.dataset.key];
+    if (p && p[0] < g.cols && p[1] < g.rows && !used.has(p[0] + ',' + p[1])) place(b, p[0], p[1]); else rest.push(b);
+  }
+  let c = 0, r = 0;
+  for (const b of rest) {
+    while (used.has(c + ',' + r)) { r++; if (r >= g.rows) { r = 0; c++; } }
+    place(b, c, r);
+  }
+}
+function nearestFree(c, r, used, g) {
+  for (let d = 0; d < g.cols + g.rows; d++) {
+    for (let dc = -d; dc <= d; dc++) for (let dr = -d; dr <= d; dr++) {
+      if (Math.max(Math.abs(dc), Math.abs(dr)) !== d) continue;
+      const x = c + dc, y = r + dr;
+      if (x >= 0 && y >= 0 && x < g.cols && y < g.rows && !used.has(x + ',' + y)) return [x, y];
+    }
+  }
+  return [c, r];
+}
+window.addEventListener('DOMContentLoaded', () => {
+  const inner = Shell.renderDesktop.bind(Shell);
+  Shell.renderDesktop = async function () {
+    const p = inner();
+    layoutDesktop();                 // uygulama simgeleri hemen yerleşsin
+    await p;
+    $$('#desktopIcons .dicon').forEach(b => b.setAttribute('draggable', 'true'));
+    layoutDesktop();
+  };
+  let resizeT = null;
+  window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(layoutDesktop, 150); });
+
+  let drag = null;   // { keys, ox, oy }
+  document.addEventListener('dragstart', e => {
+    const b = e.target.closest?.('#desktopIcons .dicon');
+    if (!b) return;
+    if (!b.classList.contains('sel')) { $$('.dicon.sel').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); }
+    const r = b.getBoundingClientRect();
+    drag = { lead: b.dataset.key, keys: $$('#desktopIcons .dicon.sel').map(x => x.dataset.key), ox: e.clientX - r.left, oy: e.clientY - r.top };
+    e.dataTransfer.setData('text/tyros-icon', drag.keys.join('\n'));
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  document.addEventListener('dragend', () => { drag = null; });
+  const desk = $('#desktop');
+  desk.addEventListener('dragover', e => {
+    if (!drag || e.target.closest('.win')) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+  });
+  desk.addEventListener('drop', e => {
+    if (!drag || e.target.closest('.win')) return;
+    e.preventDefault();
+    const g = gridSize();
+    const all = $$('.dicon', g.box);
+    const byKey = Object.fromEntries(all.map(b => [b.dataset.key, b]));
+    const lead = byKey[drag.lead];
+    if (!lead) return;
+    const [lc, lr] = lead.dataset.cell.split(',').map(Number);
+    const nc = Math.min(g.cols - 1, Math.max(0, Math.round((e.clientX - drag.ox - g.rect.left) / CELL_W)));
+    const nr = Math.min(g.rows - 1, Math.max(0, Math.round((e.clientY - drag.oy - g.rect.top) / CELL_H)));
+    const moving = new Set(drag.keys);
+    const used = new Set(all.filter(b => !moving.has(b.dataset.key)).map(b => b.dataset.cell));
+    const pos = {};
+    for (const b of all) pos[b.dataset.key] = b.dataset.cell.split(',').map(Number);
+    // önce sürüklenen simge, sonra diğer seçililer aynı aralıkla
+    for (const k of [drag.lead, ...drag.keys.filter(k => k !== drag.lead)]) {
+      const b = byKey[k]; if (!b) continue;
+      const [c, r] = b.dataset.cell.split(',').map(Number);
+      let tc = Math.min(g.cols - 1, Math.max(0, nc + c - lc)), tr = Math.min(g.rows - 1, Math.max(0, nr + r - lr));
+      if (used.has(tc + ',' + tr)) [tc, tr] = nearestFree(tc, tr, used, g);
+      used.add(tc + ',' + tr); pos[k] = [tc, tr];
+    }
+    drag = null;
+    Settings.set({ iconPos: pos });
+    layoutDesktop();
+  });
+});
 })();
