@@ -134,3 +134,67 @@ window.addEventListener('DOMContentLoaded', () => {
     $('#desktopIcons').append(b);
   };
 });
+
+/* ------------------------------------------------------------ TyrOS onay kutusu
+   Tarayıcının beyaz "127.0.0.1 says" kutusu yerine TyrOS temalı pencere. */
+function tyrosConfirm(message, { title = 'Emin misin?', ok = 'Tamam', cancel = 'Vazgeç', danger = false } = {}) {
+  return new Promise(resolve => {
+    const prev = document.activeElement;
+    const done = v => { overlay.classList.add('closing'); setTimeout(() => overlay.remove(), 140); document.removeEventListener('keydown', onKey, true); prev?.focus?.(); resolve(v); };
+    const okBtn = h('button', { class: 'btn ' + (danger ? 'danger-solid' : 'primary'), onclick: () => done(true) }, ok);
+    const box = h('div', { class: 'ty-dialog', role: 'alertdialog', 'aria-modal': 'true' },
+      h('img', { src: LOGO_URL, alt: '' }),
+      h('div', { class: 'ty-dialog-title' }, title),
+      h('div', { class: 'ty-dialog-msg' }, message),
+      h('div', { class: 'ty-dialog-btns' }, h('button', { class: 'btn', onclick: () => done(false) }, cancel), okBtn));
+    const overlay = h('div', { class: 'ty-overlay', onclick: e => { if (e.target === overlay) done(false); } }, box);
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } if (e.key === 'Enter') { e.stopPropagation(); done(true); } };
+    document.addEventListener('keydown', onKey, true);
+    document.body.append(overlay);
+    setTimeout(() => okBtn.focus(), 30);
+  });
+}
+
+/* Kapatma / yeniden başlatma sırasında logolu tam ekran */
+function powerScreen(text) {
+  document.body.append(h('div', { class: 'ty-power' }, h('img', { src: LOGO_URL, alt: '' }), h('div', {}, text)));
+}
+
+let __confirmRetry = null;
+window.confirm = message => {
+  const retry = __confirmRetry;
+  tyrosConfirm(message, { title: 'Kaydedilmemiş değişiklikler', ok: 'Kaydetmeden kapat', danger: true })
+    .then(yes => { if (yes && retry) retry(); });
+  return false;
+};
+
+window.addEventListener('DOMContentLoaded', () => {
+  // Pencere kapatırken sorulan sorular da TyrOS kutusuyla
+  const close = WM.close.bind(WM);
+  WM.close = function (id) {
+    const w = this.wins.get(id);
+    __confirmRetry = () => { if (w) w.onClose = null; close(id); };
+    try { return close(id); } finally { __confirmRetry = null; }
+  };
+
+  // Kapat / yeniden başlat / oturumu kapat
+  const POWER = {
+    shutdown: { title: 'Bilgisayar kapatılsın mı?', msg: 'Açık uygulamalar kapanacak.', ok: 'Kapat', screen: 'Kapatılıyor…',
+      cmd: 'systemctl poweroff -i || sudo -n systemctl poweroff' },
+    reboot: { title: 'Yeniden başlatılsın mı?', msg: 'Açık uygulamalar kapanacak.', ok: 'Yeniden başlat', screen: 'Yeniden başlatılıyor…',
+      cmd: 'systemctl reboot -i || sudo -n systemctl reboot' },
+    logout: { title: 'Oturum kapatılsın mı?', msg: 'Açık uygulamalar kapanacak.', ok: 'Oturumu kapat', screen: 'Oturum kapatılıyor…',
+      cmd: 'openbox --exit' },
+  };
+  Shell.power = async function (action) {
+    const p = POWER[action];
+    if (!p) return;
+    this.closePopups();
+    if (!(await tyrosConfirm(p.msg, { title: p.title, ok: p.ok, danger: action !== 'logout' }))) return;
+    powerScreen(p.screen);
+    try {
+      const r = await API.post('/api/exec', { cmd: `(sleep 1; ${p.cmd}) >/tmp/tyros-power.log 2>&1 &` });
+      if (r.code !== 0) throw new Error(r.stderr || 'İşlem başlatılamadı');
+    } catch (e) { $('.ty-power')?.remove(); fail(e); }
+  };
+});

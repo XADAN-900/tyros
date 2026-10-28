@@ -9,5 +9,5 @@ lb config noauto \
   --iso-publisher "TyrOS" \
   --iso-volume "TyrOS 1.0" \
   --image-name tyros \
-  --bootappend-live "boot=live components quiet splash loglevel=3 vt.global_cursor_default=0 systemd.show_status=false rd.udev.log_level=3 hostname=tyros username=tyr user-fullname=Tyr locales=tr_TR.UTF-8 keyboard-layouts=tr timezone=Europe/Istanbul" \
+  --bootappend-live "boot=live components noeject noprompt quiet splash loglevel=3 vt.global_cursor_default=0 systemd.show_status=false rd.udev.log_level=3 hostname=tyros username=tyr user-fullname=Tyr locales=tr_TR.UTF-8 keyboard-layouts=tr timezone=Europe/Istanbul" \
   "${@}"

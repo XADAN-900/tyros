@@ -21,3 +21,33 @@ html, body, #boot { background: #0b1220; }
 .fm-item.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 #snapHint { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
 #taskbar { background: #121827; border-top-color: #263048; }
+
+/* TyrOS onay kutusu */
+.ty-overlay {
+  position: fixed; inset: 0; z-index: 5000; display: grid; place-items: center;
+  background: rgba(6, 10, 20, .55); backdrop-filter: blur(3px);
+  animation: ty-fade .14s ease-out;
+}
+.ty-overlay.closing { animation: ty-fade .14s ease-in reverse forwards; }
+@keyframes ty-fade { from { opacity: 0; } }
+.ty-dialog {
+  width: min(400px, calc(100vw - 32px)); padding: 22px 22px 18px; border-radius: 12px;
+  background: var(--stone); border: 1px solid var(--iron); color: var(--frost);
+  box-shadow: 0 30px 80px -10px rgba(0,0,0,.75); display: grid; gap: 8px; justify-items: center; text-align: center;
+  animation: ty-pop .16s ease-out;
+}
+@keyframes ty-pop { from { opacity: 0; transform: scale(.95) translateY(6px); } }
+.ty-dialog img { width: 52px; height: 52px; object-fit: contain; margin-bottom: 4px; }
+.ty-dialog-title { font-weight: 600; font-size: 16px; }
+.ty-dialog-msg { color: var(--mist); font-size: 13.5px; }
+.ty-dialog-btns { display: flex; gap: 8px; margin-top: 12px; width: 100%; }
+.ty-dialog-btns .btn { flex: 1; justify-content: center; height: 36px; }
+.btn.danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+.btn.danger-solid:hover { filter: brightness(1.08); }
+
+/* Kapatma ekranı */
+.ty-power {
+  position: fixed; inset: 0; z-index: 6000; display: grid; place-content: center; justify-items: center; gap: 16px;
+  background: #0b1220; color: var(--mist); font-size: 14px; animation: ty-fade .3s ease-out;
+}
+.ty-power img { width: 120px; height: 120px; object-fit: contain; animation: logo-breathe 2s ease-in-out infinite; }
