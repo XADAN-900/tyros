@@ -501,7 +501,7 @@ def r_wifi_connect(q, body):
 def r_power(q, body):
     act = body.get("action")
     cmds = {"shutdown": ["systemctl", "poweroff"], "reboot": ["systemctl", "reboot"],
-            "suspend": ["systemctl", "suspend"], "logout": ["openbox", "--exit"]}
+            "suspend": ["systemctl", "suspend"], "logout": ["setsid", "-f", "/usr/local/bin/tyros-logout"]}
     if act not in cmds:
         raise ApiError("Bilinmeyen güç işlemi")
     spawn(cmds[act])
