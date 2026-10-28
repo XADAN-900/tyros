@@ -186,6 +186,12 @@ def parse_desktop(path):
         return None
     if s.get("OnlyShowIn") and "TyrOS" not in s.get("OnlyShowIn"):
         return None
+    # Yalnızca canlı (USB/ISO) oturumda görünenler, ör. "TyrOS'u Diske Kur"
+    if s.get("X-TyrOS-LiveOnly", "").lower() == "true" and not os.path.isdir("/run/live/medium"):
+        return None
+    te = s.get("TryExec", "")
+    if te and not (os.access(te, os.X_OK) if te.startswith("/") else shutil.which(te)):
+        return None
     return {
         "id": os.path.basename(path),
         "name": localized(s, "Name"),
