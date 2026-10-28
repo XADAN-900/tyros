@@ -7,3 +7,5 @@ Icon=/usr/share/tyros/logo.png
 Terminal=false
 Categories=System;
 StartupWMClass=calamares
+TryExec=calamares
+X-TyrOS-LiveOnly=true
