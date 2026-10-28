@@ -74,3 +74,78 @@ html, body, #boot { background: #0b1220; }
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 #desktop, .fm-list { user-select: none; }
+
+/* ---------- Ayarlar (genişletilmiş) ---------- */
+.st { display: grid; grid-template-columns: 210px 1fr; height: 100%; min-height: 0; }
+.st-side { background: var(--stone-2); border-right: 1px solid var(--iron); padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; overflow: auto; }
+.st-side button { display: flex; align-items: center; gap: 10px; border: 0; background: none; text-align: left; padding: 8px 10px; border-radius: 6px; font-size: 13px; color: var(--mist); cursor: pointer; }
+.st-side button svg { width: 17px; height: 17px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.st-side button:hover { background: var(--stone-3); color: var(--frost); }
+.st-side button.on { background: var(--stone-3); color: var(--frost); box-shadow: inset 3px 0 0 var(--accent); }
+.st-body { overflow: auto; padding: 20px 26px 30px; min-height: 0; }
+.st-body h2 { font: 600 20px var(--serif); margin: 0 0 18px; }
+.st-group { margin-bottom: 22px; }
+.st-gtitle { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--mist); margin: 0 0 8px 2px; }
+.st-gtitle-row { display: flex; align-items: center; justify-content: space-between; text-transform: none; letter-spacing: 0; font-size: 13px; }
+.st-card { background: var(--stone-2); border: 1px solid var(--iron); border-radius: 9px; overflow: hidden; }
+.st-card > .walls, .st-card > .swatches { padding: 14px; }
+.st-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; min-height: 52px; }
+.st-row + .st-row, .st-card > * + .st-row { border-top: 1px solid #2f3843; }
+.st-label { min-width: 0; display: flex; flex-direction: column; }
+.st-label.st-net { flex-direction: row; align-items: center; gap: 12px; }
+.st-net .ico { width: 20px; height: 20px; }
+.st-net .ico svg { fill: none; stroke: currentColor; stroke-width: 1.8; }
+.st-hint { font-size: 12px; margin-top: 2px; }
+.st-ctl { flex: none; display: flex; align-items: center; gap: 8px; }
+.st-pad { padding: 14px 16px; }
+.st-select { min-width: 220px; max-width: 320px; }
+.st-range { width: 220px; accent-color: var(--accent); }
+.st-inline { display: flex; align-items: center; gap: 10px; }
+.st-val { min-width: 44px; text-align: right; }
+.st-btns { justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
+.st-clock { font: 600 22px var(--serif); }
+.st-bar { margin: 10px 0 6px; height: 9px; border-radius: 5px; }
+.st-toggle { width: 44px; height: 24px; border-radius: 12px; border: 1px solid var(--iron); background: var(--stone-3); position: relative; padding: 0; cursor: pointer; transition: background .15s; }
+.st-toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--mist); transition: transform .15s, background .15s; }
+.st-toggle.on { background: var(--accent); border-color: var(--accent); }
+.st-toggle.on::after { transform: translateX(20px); background: var(--accent-ink); }
+.ty-noanim *, .ty-noanim *::before, .ty-noanim *::after { animation: none !important; transition: none !important; }
+
+/* ---------- Uygulama Mağazası ---------- */
+.sto-right { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.sto-main { flex: 1; overflow: auto; padding: 18px 22px 26px; min-height: 0; }
+.sto-main h3 { font: 600 17px var(--serif); margin: 6px 0 12px; }
+.sto-main h4 { font-size: 12.5px; font-weight: 600; margin: 20px 0 10px; }
+.sto-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px; }
+.sto-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--stone-2); border: 1px solid var(--iron); border-radius: 9px; min-width: 0; }
+.sto-card:hover { border-color: #4b5766; }
+.sto-card > .ico { width: 40px; height: 40px; }
+.sto-info { flex: 1; min-width: 0; }
+.sto-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sto-desc { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sto-badge { font-size: 11px; padding: 2px 7px; border-radius: 10px; background: rgba(127,191,134,.16); color: var(--ok); flex: none; }
+.sto-card .btn { flex: none; min-width: 76px; justify-content: center; }
+.sto-hero { display: flex; align-items: center; gap: 18px; padding: 18px 20px; margin-bottom: 18px; border-radius: 12px; border: 1px solid var(--iron);
+  background: linear-gradient(120deg, rgba(214,178,94,.16), rgba(38,46,56,.9) 55%); }
+.sto-hero img { width: 64px; height: 64px; }
+.sto-hero h2 { font: 600 21px var(--serif); margin: 0 0 4px; }
+.sto-cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 10px; margin-bottom: 22px; }
+.sto-cat { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px; border-radius: 9px; border: 1px solid var(--iron); background: var(--stone-2); text-align: left; color: var(--frost); cursor: pointer; }
+.sto-cat:hover { background: var(--stone-3); border-color: var(--accent); }
+.sto-cat .ico { width: 26px; height: 26px; color: var(--accent); margin-bottom: 4px; }
+.sto-cat .ico svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sto-cat .muted { font-size: 12px; }
+.sto-notice { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 16px; margin-bottom: 16px; border-radius: 9px;
+  border: 1px solid rgba(214,178,94,.5); background: rgba(214,178,94,.08); }
+.sto-status { display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--iron); background: #141a21; }
+.sto-status[hidden] { display: none; }
+.sto-st { min-width: 0; flex: 1; }
+.sto-st pre { margin: 4px 0 0; font: 11.5px/1.4 var(--mono); color: #b9c4ce; white-space: pre-wrap; max-height: 52px; overflow: hidden; }
+.sto-spin { width: 18px; height: 18px; margin-top: 2px; border-radius: 50%; border: 2px solid var(--iron); border-top-color: var(--accent); animation: sto-spin .8s linear infinite; flex: none; }
+@keyframes sto-spin { to { transform: rotate(360deg); } }
+.sto-allhead { display: flex; align-items: center; gap: 12px; margin: 22px 0 10px; }
+.sto-allhead h4 { margin: 0 !important; }
+.sto-allhead .field { margin-left: auto; }
+.sto-more { display: block; margin: 14px auto 0; }
+.sto-more[hidden] { display: none; }
+.sto-card > .ico, .sto-card .app-tile { font-size: 40px; }
