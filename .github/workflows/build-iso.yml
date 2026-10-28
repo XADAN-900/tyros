@@ -45,9 +45,13 @@ jobs:
             python3 tools/make-assets.py
             chmod +x auto/* config/hooks/normal/*.hook.chroot config/includes.chroot/usr/local/bin/* config/includes.chroot/usr/local/sbin/* config/includes.chroot/opt/tyros/api/*.py
             EXTRA=""
+            # Daha iyi sıkıştırma (zstd 19): ISO küçülür, açılış hızı aynı kalır
+            if grep -qs -- "chroot-squashfs-compression-level" /usr/lib/live/build/config; then
+              EXTRA="--chroot-squashfs-compression-level 19"
+            fi
             if [ "$LITE" = 1 ]; then
               sed -i "/^libreoffice/d;/^gimp$/d" config/package-lists/tyros.list.chroot
-              EXTRA="--firmware-binary false"
+              EXTRA="$EXTRA --firmware-binary false"
             fi
             lb config $EXTRA
             lb build
