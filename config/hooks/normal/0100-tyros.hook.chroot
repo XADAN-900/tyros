@@ -12,6 +12,9 @@ systemctl enable apache2 NetworkManager
 
 chmod 755 /usr/local/bin/tyros-session /usr/local/bin/tyros-close /usr/local/bin/tyros-install /opt/tyros/api/tyros-api.py
 chmod -R a+rX /opt/tyros
+chmod 755 /usr/local/sbin/tyros-pkg
+chmod 0440 /etc/sudoers.d/tyros-pkg
+chown root:root /etc/sudoers.d/tyros-pkg
 
 # --- Openbox: arayüz penceresi her zaman altta, çerçevesiz; tek masaüstü ---
 python3 - <<'PY'
