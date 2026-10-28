@@ -13,6 +13,11 @@ systemctl enable apache2 NetworkManager
 chmod 755 /usr/local/bin/tyros-session /usr/local/bin/tyros-logout /usr/local/bin/tyros-close /usr/local/bin/tyros-install /opt/tyros/api/tyros-api.py
 chmod -R a+rX /opt/tyros
 chmod 755 /usr/local/sbin/tyros-pkg
+chmod 755 /usr/lib/live/config/2000-tyros-nopasswd
+# Giriş ekranında "nopasswdlogin" grubundakiler şifresiz girebilsin (yalnızca canlı kullanıcı bu grupta)
+if [ -f /etc/pam.d/lightdm ] && ! grep -q nopasswdlogin /etc/pam.d/lightdm; then
+  sed -i '/pam_nologin.so/a auth    sufficient      pam_succeed_if.so user ingroup nopasswdlogin' /etc/pam.d/lightdm
+fi
 chmod 0440 /etc/sudoers.d/tyros-pkg
 chown root:root /etc/sudoers.d/tyros-pkg
 
