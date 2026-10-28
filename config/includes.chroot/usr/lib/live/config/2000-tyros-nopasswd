@@ -1,0 +1,11 @@
+#!/bin/sh
+# TyrOS canlı (USB) oturumu: canlı kullanıcı giriş ekranında şifresiz girebilsin.
+# Bu betik yalnızca canlı açılışta (live-config) çalışır; diske kurulan sisteme etki etmez.
+groupadd -f nopasswdlogin
+U=$(awk -F: '$3==1000{print $1; exit}' /etc/passwd)
+[ -n "$U" ] && usermod -aG nopasswdlogin "$U"
+# Giriş ekranı açıldığında canlı kullanıcı seçili gelsin
+mkdir -p /var/lib/lightdm/.cache/lightdm-gtk-greeter 2>/dev/null
+printf '[greeter]\nlast-user=%s\nlast-session=openbox\n' "$U" > /var/lib/lightdm/.cache/lightdm-gtk-greeter/state 2>/dev/null
+chown -R lightdm:lightdm /var/lib/lightdm/.cache 2>/dev/null
+exit 0
