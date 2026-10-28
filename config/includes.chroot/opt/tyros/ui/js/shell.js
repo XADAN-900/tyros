@@ -251,7 +251,7 @@ const Shell = {
     // Açık menüleri dışarı tıklayınca kapat
     document.addEventListener('pointerdown', e => {
       if (!e.target.closest('#startMenu, #startBtn, #quickPanel, #tray, #ctxMenu')) this.closePopups();
-      if (!e.target.closest('.dicon')) $$('.dicon.sel').forEach(x => x.classList.remove('sel'));
+      if (!e.target.closest('.dicon, #ctxMenu')) $$('.dicon.sel').forEach(x => x.classList.remove('sel'));
     });
 
     $('#desktop').addEventListener('contextmenu', e => {
