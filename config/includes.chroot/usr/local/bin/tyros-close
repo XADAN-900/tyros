@@ -1,0 +1,5 @@
+#!/bin/sh
+# Alt+F4: yerel Linux pencerelerini kapatır, TyrOS arayüzünün kendisini kapatmaz.
+id=$(xdotool getactivewindow 2>/dev/null) || exit 0
+xprop -id "$id" WM_CLASS 2>/dev/null | grep -qi tyrosshell && exit 0
+wmctrl -ic "$(printf '0x%x' "$id")"

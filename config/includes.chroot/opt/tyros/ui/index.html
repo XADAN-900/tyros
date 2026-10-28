@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TyrOS</title>
+  <link rel="stylesheet" href="tyros.css">
+</head>
+<body>
+  <!-- Açılış ekranı -->
+  <div id="boot">
+    <svg class="boot-rune" viewBox="0 0 100 100" aria-hidden="true">
+      <path d="M24 40 L50 12 L76 40 M50 12 V88" />
+    </svg>
+    <div class="boot-name">TyrOS</div>
+    <div class="boot-status" id="bootStatus">Sistem başlatılıyor</div>
+  </div>
+
+  <!-- Masaüstü -->
+  <main id="desktop" aria-label="Masaüstü">
+    <div id="wallpaper"></div>
+    <div id="desktopIcons"></div>
+    <div id="windows"></div>
+  </main>
+
+  <!-- Başlat menüsü -->
+  <section id="startMenu" hidden aria-label="Başlat menüsü">
+    <aside class="sm-side">
+      <div class="sm-user">
+        <div class="sm-avatar" id="smAvatar">T</div>
+        <div>
+          <div class="sm-username" id="smUser">tyr</div>
+          <div class="sm-host" id="smHost">tyros</div>
+        </div>
+      </div>
+      <nav class="sm-cats" id="smCats"></nav>
+      <div class="sm-power">
+        <button data-power="logout" title="Oturumu kapat">Oturumu kapat</button>
+        <button data-power="reboot" title="Yeniden başlat">Yeniden başlat</button>
+        <button data-power="shutdown" class="danger" title="Bilgisayarı kapat">Kapat</button>
+      </div>
+    </aside>
+    <div class="sm-main">
+      <input id="smSearch" type="search" placeholder="Uygulama ara…" autocomplete="off" spellcheck="false">
+      <div id="smGrid" class="sm-grid" role="list"></div>
+    </div>
+  </section>
+
+  <!-- Hızlı ayarlar paneli -->
+  <section id="quickPanel" hidden aria-label="Hızlı ayarlar">
+    <div class="qp-row">
+      <span class="qp-label">Ses</span>
+      <input type="range" id="qpVolume" min="0" max="100" value="50">
+      <button id="qpMute" class="qp-mini" title="Sesi kapat/aç"></button>
+    </div>
+    <div class="qp-net" id="qpNet">Ağ durumu alınıyor…</div>
+    <div class="qp-actions">
+      <button data-open="settings">Tüm ayarlar</button>
+      <button data-power="shutdown" class="danger">Kapat</button>
+    </div>
+  </section>
+
+  <!-- Görev çubuğu -->
+  <footer id="taskbar">
+    <button id="startBtn" title="Başlat (Super)" aria-label="Başlat menüsü">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M26 40 L50 14 L74 40 M50 14 V86"/></svg>
+    </button>
+    <div id="pinned"></div>
+    <div class="tb-sep"></div>
+    <div id="tasks"></div>
+    <button id="tray" title="Hızlı ayarlar">
+      <span id="trayNet"></span>
+      <span id="trayVol"></span>
+      <span id="trayBat"></span>
+    </button>
+    <div id="clock" title=""><span id="clockTime">--:--</span><span id="clockDate"></span></div>
+  </footer>
+
+  <div id="ctxMenu" hidden></div>
+  <div id="toasts" aria-live="polite"></div>
+
+  <script src="js/core.js"></script>
+  <script src="js/wm.js"></script>
+  <script src="js/apps.js"></script>
+  <script src="js/shell.js"></script>
+</body>
+</html>

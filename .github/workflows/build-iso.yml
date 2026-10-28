@@ -1,0 +1,78 @@
+# TyrOS ISO'sunu GitHub sunucularında derler ve "Releases" bölümünde yayınlar.
+# Kullanım: GitHub > Actions > "TyrOS ISO derle" > Run workflow
+name: TyrOS ISO derle
+
+on:
+  workflow_dispatch:
+    inputs:
+      lite:
+        description: "Hafif sürüm (LibreOffice ve GIMP hariç, daha küçük ISO)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Disk alanı aç
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/boost
+          sudo docker image prune -af || true
+          df -h /
+
+      - name: ISO derle (Debian 13 kapsayıcısında)
+        env:
+          LITE: ${{ inputs.lite && '1' || '0' }}
+        run: |
+          docker run --rm --privileged -e LITE -v "$PWD":/build -w /build debian:trixie bash -euxc '
+            apt-get update
+            apt-get install -y live-build debootstrap squashfs-tools xorriso isolinux syslinux-common \
+              grub-pc-bin grub-efi-amd64-bin mtools dosfstools
+            chmod +x auto/* config/hooks/normal/*.hook.chroot config/includes.chroot/usr/local/bin/* config/includes.chroot/opt/tyros/api/*.py
+            EXTRA=""
+            if [ "$LITE" = 1 ]; then
+              sed -i "/^libreoffice/d;/^gimp$/d" config/package-lists/tyros.list.chroot
+              EXTRA="--firmware-binary false"
+            fi
+            lb config $EXTRA
+            lb build
+          '
+          ls -lh *.iso
+
+      - name: Sürüm dosyalarını hazırla
+        run: |
+          mkdir release
+          ISO=$(ls tyros-*.iso | head -n1)
+          SIZE=$(stat -c %s "$ISO")
+          # GitHub tek dosya için 2 GB sınırı koyar; büyükse parçalara böl
+          if [ "$SIZE" -gt 2000000000 ]; then
+            split -b 1900M -d "$ISO" "release/$ISO.part"
+            echo "ISO 2 GB'tan büyük olduğu için parçalara bölündü. Birleştirmek için:" > release/BIRLESTIR.txt
+            echo "  Linux/Mac:  cat $ISO.part* > $ISO" >> release/BIRLESTIR.txt
+            echo "  Windows:    copy /b $ISO.part00 + $ISO.part01 $ISO" >> release/BIRLESTIR.txt
+          else
+            mv "$ISO" release/
+          fi
+          sha256sum "$ISO" 2>/dev/null > release/SHA256SUMS || (cd release && sha256sum * > SHA256SUMS)
+          ls -lh release
+
+      - name: Releases bölümünde yayınla
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: iso-${{ github.run_number }}
+          name: TyrOS 1.0 — derleme ${{ github.run_number }}
+          body: TyrOS ISO dosyası. USB'ye Rufus veya balenaEtcher ile yaz, ya da sanal makinede aç.
+          files: release/*
+
+      - name: Hata olursa derleme kaydını sakla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log

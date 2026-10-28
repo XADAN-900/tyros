@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+lb config noauto \
+  --distribution trixie \
+  --archive-areas "main contrib non-free non-free-firmware" \
+  --debian-installer live \
+  --iso-application "TyrOS" \
+  --iso-publisher "TyrOS" \
+  --iso-volume "TyrOS 1.0" \
+  --image-name tyros \
+  --bootappend-live "boot=live components quiet hostname=tyros username=tyr user-fullname=Tyr locales=tr_TR.UTF-8 keyboard-layouts=tr timezone=Europe/Istanbul" \
+  "${@}"

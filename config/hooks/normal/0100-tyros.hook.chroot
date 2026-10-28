@@ -1,0 +1,57 @@
+#!/bin/sh
+set -e
+echo "==> TyrOS yapılandırılıyor"
+
+# --- Apache httpd ---
+a2enmod proxy proxy_http proxy_wstunnel headers
+a2dissite 000-default || true
+a2ensite 000-tyros-deny tyros
+# Sadece bu bilgisayardan erişilsin
+sed -i 's/^Listen 80$/Listen 127.0.0.1:80/' /etc/apache2/ports.conf
+systemctl enable apache2 NetworkManager
+
+chmod 755 /usr/local/bin/tyros-session /usr/local/bin/tyros-close /opt/tyros/api/tyros-api.py
+chmod -R a+rX /opt/tyros
+
+# --- Openbox: arayüz penceresi her zaman altta, çerçevesiz; tek masaüstü ---
+python3 - <<'PY'
+import re
+p = "/etc/xdg/openbox/rc.xml"
+s = open(p, encoding="utf-8").read()
+rule = """
+  <application class="TyrOSShell*">
+    <decor>no</decor>
+    <position force="yes"><x>0</x><y>0</y></position>
+    <layer>below</layer>
+    <skip_taskbar>yes</skip_taskbar>
+    <skip_pager>yes</skip_pager>
+    <focus>yes</focus>
+  </application>
+</applications>"""
+s = s.replace("</applications>", rule, 1)
+s = re.sub(r"(<margins>.*?<bottom>)\d+(</bottom>)", r"\g<1>50\2", s, count=1, flags=re.S)
+s = re.sub(r"(<desktops>.*?<number>)\d+(</number>)", r"\g<1>1\2", s, count=1, flags=re.S)
+s = re.sub(r'(<keybind key="A-F4">\s*)<action name="Close"\s*/>',
+           r'\1<action name="Execute"><command>/usr/local/bin/tyros-close</command></action>', s, count=1)
+s = re.sub(r"(<theme>\s*<name>)[^<]*(</name>)", r"\1Clearlooks\2", s, count=1)
+open(p, "w", encoding="utf-8").write(s)
+PY
+
+# --- Sistem kimliği ---
+rm -f /etc/os-release
+cat > /etc/os-release <<'OS'
+PRETTY_NAME="TyrOS 1.0"
+NAME="TyrOS"
+VERSION_ID="1.0"
+VERSION="1.0 (Debian 13 tabanlı)"
+VERSION_CODENAME=trixie
+ID=tyros
+ID_LIKE=debian
+HOME_URL="https://www.debian.org/"
+OS
+printf 'TyrOS 1.0 \\n \\l\n\n' > /etc/issue
+echo "TyrOS 1.0" > /etc/issue.net
+
+# Türkçe dil ortamı
+sed -i 's/^# *tr_TR.UTF-8/tr_TR.UTF-8/' /etc/locale.gen
+locale-gen

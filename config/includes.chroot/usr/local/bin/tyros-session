@@ -1,0 +1,51 @@
+#!/bin/bash
+# TyrOS grafik oturumu — openbox autostart tarafından başlatılır.
+# 1) sistem köprüsü (API)  2) terminal (ttyd)  3) HTML arayüzü (Chromium uygulama modu)
+LOG="$HOME/.cache/tyros"
+mkdir -p "$LOG" "$HOME/.config/tyros"
+xset s off 2>/dev/null
+xsetroot -solid '#0b141c' 2>/dev/null
+xdg-user-dirs-update 2>/dev/null
+
+# 1) Sistem köprüsü — çökerse kendini yeniden başlatır
+( while true; do
+    python3 /opt/tyros/api/tyros-api.py >>"$LOG/api.log" 2>&1
+    sleep 1
+  done ) &
+
+# 2) Gerçek terminal — Apache bunu /term/ adresinde sunar
+if command -v ttyd >/dev/null; then
+  ( umask 000
+    while true; do
+      rm -f /run/tyros/ttyd.sock
+      ttyd -i /run/tyros/ttyd.sock -b /term -W \
+        -t fontSize=14 -t disableLeaveAlert=true \
+        -t 'theme={"background":"#0d1116","foreground":"#d7e0e8","cursor":"#d6b25e"}' \
+        bash -l >>"$LOG/ttyd.log" 2>&1
+      sleep 1
+    done ) &
+fi
+
+# 3) httpd + API hazır olana kadar bekle
+for _ in $(seq 1 60); do
+  curl -fs -H 'X-TyrOS: 1' http://127.0.0.1/api/ping >/dev/null && break
+  sleep 0.5
+done
+
+read -r W H < <(xdpyinfo 2>/dev/null | awk '/dimensions:/{split($2,a,"x"); print a[1], a[2]}')
+BROWSER=$(command -v chromium || command -v chromium-browser)
+
+# Arayüz penceresi: tam ekran, çerçevesiz, her zaman diğer uygulamaların altında.
+# Kapanırsa (ör. Ctrl+W) hemen yeniden açılır.
+while true; do
+  "$BROWSER" \
+    --class=TyrOSShell \
+    --user-data-dir="$HOME/.config/tyros/shell" \
+    --app=http://127.0.0.1/ \
+    --window-position=0,0 --window-size="${W:-1280},${H:-800}" \
+    --no-first-run --no-default-browser-check --noerrdialogs \
+    --disable-features=Translate,TranslateUI --password-store=basic \
+    --overscroll-history-navigation=0 --disable-pinch \
+    >>"$LOG/shell.log" 2>&1
+  sleep 1
+done

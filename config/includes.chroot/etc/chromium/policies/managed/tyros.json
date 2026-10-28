@@ -1,0 +1,8 @@
+{
+  "TranslateEnabled": false,
+  "PasswordManagerEnabled": false,
+  "DefaultBrowserSettingEnabled": false,
+  "MetricsReportingEnabled": false,
+  "BrowserSignin": 0,
+  "PromotionalTabsEnabled": false
+}

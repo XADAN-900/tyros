@@ -1,0 +1,86 @@
+# ===== TyrOS paket listesi (Debian 13 "trixie") =====
+# Buraya Debian deposundaki herhangi bir paketin adını yazarak ISO'ya ekleyebilirsin.
+# Tüm Debian paketleri sistemde ayrıca Uygulama Mağazası'ndan kurulabilir.
+
+# --- Canlı sistem ve temel ---
+live-boot
+live-config
+live-config-systemd
+systemd-sysv
+sudo
+locales
+keyboard-configuration
+console-setup
+dbus-user-session
+polkitd
+
+# --- Donanım sürücüleri (firmware) ---
+firmware-linux
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+firmware-sof-signed
+
+# --- Grafik sistemi ---
+xserver-xorg
+xinit
+openbox
+x11-utils
+x11-xserver-utils
+wmctrl
+xdotool
+
+# --- TyrOS çekirdeği: httpd + köprü + arayüz motoru ---
+apache2
+python3
+ttyd
+curl
+chromium
+
+# --- Ağ ve ses ---
+network-manager
+network-manager-gnome
+pipewire-audio
+wireplumber
+
+# --- Yazı tipleri ve simgeler ---
+fonts-noto-core
+fonts-noto-mono
+fonts-dejavu
+fonts-noto-color-emoji
+hicolor-icon-theme
+adwaita-icon-theme
+papirus-icon-theme
+
+# --- Masaüstü yardımcıları ---
+xdg-utils
+xdg-user-dirs
+lxterminal
+thunar
+mousepad
+ristretto
+evince
+file-roller
+galculator
+
+# --- Hazır uygulamalar ---
+firefox-esr
+firefox-esr-l10n-tr
+libreoffice-writer
+libreoffice-calc
+libreoffice-impress
+libreoffice-gtk3
+libreoffice-l10n-tr
+gimp
+vlc
+synaptic
+gparted
+
+# --- Komut satırı araçları ---
+htop
+nano
+vim
+git
+wget
+zip
+unzip
