@@ -14,6 +14,8 @@ console-setup
 dbus-user-session
 polkitd
 plymouth
+lightdm
+lightdm-gtk-greeter
 
 # --- Donanım sürücüleri (firmware) ---
 firmware-linux
@@ -76,6 +78,10 @@ gimp
 vlc
 synaptic
 gparted
+
+# --- Diske kurulum aracı ---
+calamares
+calamares-settings-debian
 
 # --- Komut satırı araçları ---
 htop

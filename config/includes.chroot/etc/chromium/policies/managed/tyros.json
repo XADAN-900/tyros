@@ -4,5 +4,19 @@
   "DefaultBrowserSettingEnabled": false,
   "MetricsReportingEnabled": false,
   "BrowserSignin": 0,
-  "PromotionalTabsEnabled": false
+  "SyncDisabled": true,
+  "PromotionalTabsEnabled": false,
+  "PromotionsEnabled": false,
+  "CommandLineFlagSecurityWarningsEnabled": false,
+  "SuppressUnsupportedOSWarning": true,
+  "DefaultNotificationsSetting": 2,
+  "BackgroundModeEnabled": false,
+  "EnableMediaRouter": false,
+  "PrivacySandboxPromptEnabled": false,
+  "PrivacySandboxAdTopicsEnabled": false,
+  "PrivacySandboxSiteEnabledAdsEnabled": false,
+  "PrivacySandboxAdMeasurementEnabled": false,
+  "AutofillAddressEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "HideWebStoreIcon": true
 }

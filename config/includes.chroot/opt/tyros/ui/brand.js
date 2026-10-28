@@ -43,3 +43,94 @@ BUILTIN.about.launch = async () => {
   WM.open({ app: BUILTIN.about, width: 480, height: 380, content: root, single: true });
   try { const s = await API.get('/api/sysinfo'); sub.textContent = `${s.os} · Linux ${s.kernel}`; } catch { sub.textContent = ''; }
 };
+
+/* ------------------------------------------------------------ diske kurulum */
+ICONS.install = '<path d="M12 3v11M7.5 9.5L12 14l4.5-4.5"/><path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/>';
+const INSTALLER = {
+  id: 'tyros-install.desktop', name: "TyrOS'u Diske Kur", glyph: 'install',
+  tile: 'linear-gradient(135deg, #2f86c9, #7a4fc4)', comment: "TyrOS'u bilgisayarına kalıcı olarak kur",
+};
+let TYROS_LIVE = null;   // null: henüz bilinmiyor
+async function checkLive() {
+  if (TYROS_LIVE !== null) return TYROS_LIVE;
+  try {
+    const r = await API.post('/api/exec', { cmd: 'test -d /run/live/medium && echo canli' });
+    TYROS_LIVE = r.stdout.trim() === 'canli';
+  } catch { TYROS_LIVE = false; }
+  return TYROS_LIVE;
+}
+
+/* ------------------------------------------------------------ yedek terminal
+   ttyd çalışmıyorsa kullanılır. Uzun komutlar (ör. sudo apt update) için 10 dakika
+   bekler ve komut sürerken bunu ekranda gösterir. */
+function simpleTerminal(box, win, startCwd) {
+  let cwd = startCwd || '~';
+  const hist = []; let hi = 0;
+  const out = h('div');
+  const prompt = h('span', { class: 'prompt' });
+  const input = h('input', { spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Komut' });
+  const busy = h('pre', { class: 'muted', hidden: true }, 'Komut çalışıyor…');
+  const term = h('div', { class: 'term', onclick: () => input.focus() },
+    out, busy, h('div', { class: 'term-line' }, prompt, input));
+  box.append(term);
+  const setPrompt = () => { prompt.textContent = `${cwd.replace(/^\/home\/[^/]+/, '~')} $`; };
+  setPrompt();
+  setTimeout(() => input.focus(), 50);
+  input.addEventListener('keydown', async e => {
+    if (e.key === 'ArrowUp') { if (hi > 0) input.value = hist[--hi]; e.preventDefault(); return; }
+    if (e.key === 'ArrowDown') { input.value = hi < hist.length - 1 ? hist[++hi] : (hi = hist.length, ''); e.preventDefault(); return; }
+    if (e.key === 'l' && e.ctrlKey) { out.innerHTML = ''; e.preventDefault(); return; }
+    if (e.key !== 'Enter' || input.disabled) return;
+    const cmd = input.value; input.value = '';
+    out.append(h('pre', {}, h('span', { class: 'prompt' }, prompt.textContent + ' '), cmd));
+    if (!cmd.trim()) return;
+    hist.push(cmd); hi = hist.length;
+    if (cmd.trim() === 'clear') { out.innerHTML = ''; return; }
+    input.disabled = true; busy.hidden = false; term.scrollTop = term.scrollHeight;
+    try {
+      const marker = '__TYROS_CWD__';
+      const r = await API.post('/api/exec', { cwd, timeout: 600, cmd: `${cmd}\n__rc=$?; printf '\\n${marker}%s' "$PWD"; exit $__rc` });
+      let stdout = r.stdout;
+      const i = stdout.lastIndexOf(marker);
+      if (i >= 0) { cwd = stdout.slice(i + marker.length).trim(); stdout = stdout.slice(0, i).replace(/\n$/, ''); }
+      if (stdout) out.append(h('pre', {}, stdout));
+      if (r.stderr) out.append(h('pre', { class: 'err' }, r.stderr.replace(/\n$/, '')));
+    } catch (err) { out.append(h('pre', { class: 'err' }, err.message)); }
+    busy.hidden = true; input.disabled = false; setPrompt(); input.focus();
+    term.scrollTop = term.scrollHeight;
+  });
+}
+
+/* ------------------------------------------------------------ kabuk ayarları
+   shell.js'den sonra, açılıştan hemen önce uygulanır. */
+window.addEventListener('DOMContentLoaded', () => {
+  // Uygulama açılırken "Açılıyor" bildirimi gösterme; sadece hata olursa bildir
+  Shell.launch = function (app, arg) {
+    this.closePopups();
+    if (app.builtin) return app.launch(arg);
+    if (app.id === INSTALLER.id) notify('Kurulum sihirbazı açılıyor', 'Birkaç saniye sürebilir.', false, 3000);
+    API.post('/api/launch', { id: app.id }).catch(fail);
+  };
+
+  // Kurulum aracı sadece canlı (USB) oturumda görünsün
+  const loadApps = Shell.loadApps.bind(Shell);
+  Shell.loadApps = async function (force) {
+    await loadApps(force);
+    if (!(await checkLive())) {
+      this.native = this.native.filter(a => a.id !== INSTALLER.id);
+      this.renderMenu();
+    }
+  };
+
+  // Canlı oturumda masaüstüne "TyrOS'u Diske Kur" simgesi
+  const renderDesktop = Shell.renderDesktop.bind(Shell);
+  Shell.renderDesktop = function () {
+    renderDesktop();
+    if (!TYROS_LIVE) return;
+    const b = h('button', { class: 'dicon' }, appIcon(INSTALLER), h('span', {}, INSTALLER.name));
+    b.addEventListener('click', () => { $$('.dicon.sel').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); });
+    b.addEventListener('dblclick', () => this.launch(INSTALLER));
+    b.addEventListener('keydown', e => e.key === 'Enter' && this.launch(INSTALLER));
+    $('#desktopIcons').append(b);
+  };
+});

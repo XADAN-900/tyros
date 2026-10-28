@@ -3,7 +3,8 @@ set -e
 lb config noauto \
   --distribution trixie \
   --archive-areas "main contrib non-free non-free-firmware" \
-  --debian-installer live \
+  --debian-installer none \
+  --chroot-squashfs-compression-type zstd \
   --iso-application "TyrOS" \
   --iso-publisher "TyrOS" \
   --iso-volume "TyrOS 1.0" \

@@ -13,14 +13,16 @@ xdg-user-dirs-update 2>/dev/null
     sleep 1
   done ) &
 
-# 2) Gerçek terminal — Apache bunu /term/ adresinde sunar
+# 2) Gerçek terminal — Apache bunu /term/ adresinde sunar.
+#    /run/tyros klasörü www-data grubuna ait ve setgid; böylece ttyd'nin açtığı
+#    soket otomatik olarak www-data grubunda olur ve Apache ona bağlanabilir.
 if command -v ttyd >/dev/null; then
   ( umask 000
     while true; do
       rm -f /run/tyros/ttyd.sock
       ttyd -i /run/tyros/ttyd.sock -b /term -W \
         -t fontSize=14 -t disableLeaveAlert=true \
-        -t 'theme={"background":"#0d1116","foreground":"#d7e0e8","cursor":"#d6b25e"}' \
+        -t 'theme={"background":"#0d1116","foreground":"#d7e0e8","cursor":"#8b7cf0"}' \
         bash -l >>"$LOG/ttyd.log" 2>&1
       sleep 1
     done ) &
@@ -54,18 +56,27 @@ read -r W H < <(xdpyinfo 2>/dev/null | awk '/dimensions:/{split($2,a,"x"); print
   done ) &
 
 BROWSER=$(command -v chromium || command -v chromium-browser)
+PREF="$HOME/.config/tyros/shell/Default/Preferences"
+# Google hizmet anahtarı uyarısını gösterme
+export GOOGLE_API_KEY=no GOOGLE_DEFAULT_CLIENT_ID=no GOOGLE_DEFAULT_CLIENT_SECRET=no
 
 # Arayüz penceresi: tam ekran, çerçevesiz, her zaman diğer uygulamaların altında.
 # Kapanırsa (ör. Ctrl+W) hemen yeniden açılır.
 while true; do
+  # Önceki kapanış düzgün değilse çıkan "Sayfalar geri yüklensin mi?" balonunu engelle
+  [ -f "$PREF" ] && sed -i -e 's/"exited_cleanly":false/"exited_cleanly":true/' \
+    -e 's/"exit_type":"[A-Za-z]*"/"exit_type":"Normal"/' "$PREF"
   "$BROWSER" \
     --class=TyrOSShell \
     --user-data-dir="$HOME/.config/tyros/shell" \
     --app=http://127.0.0.1/ \
     --window-position=0,0 --window-size="${W:-1280},${H:-800}" \
     --no-first-run --no-default-browser-check --noerrdialogs \
-    --disable-features=Translate,TranslateUI --password-store=basic \
+    --password-store=basic \
     --overscroll-history-navigation=0 --disable-pinch \
+    --hide-crash-restore-bubble --disable-session-crashed-bubble --disable-infobars \
+    --disable-features=Translate,TranslateUI,DownloadBubble,DownloadBubbleV2,MediaRouter,GlobalMediaControls,ChromeWhatsNewUI,PrivacySandboxSettings4 \
+    --disable-component-update --disable-background-networking --disable-sync --no-pings \
     >>"$LOG/shell.log" 2>&1
   sleep 1
 done

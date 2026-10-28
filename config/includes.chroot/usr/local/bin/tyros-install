@@ -1,0 +1,13 @@
+#!/bin/sh
+# TyrOS'u bilgisayara kalıcı olarak kurar (Calamares kurulum sihirbazı).
+# Yalnızca canlı (USB/ISO) oturumda çalışır.
+if [ ! -d /run/live/medium ]; then
+  echo "TyrOS zaten diske kurulu." >&2
+  exit 1
+fi
+export QT_AUTO_SCREEN_SCALE_FACTOR=1
+xhost +si:localuser:root >/dev/null 2>&1
+sudo -n mv /etc/fstab /etc/fstab.orig.calamares 2>/dev/null
+sudo -n -E calamares "$@"
+sudo -n mv /etc/fstab.orig.calamares /etc/fstab 2>/dev/null
+xhost -si:localuser:root >/dev/null 2>&1

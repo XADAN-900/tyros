@@ -1,0 +1,10 @@
+# Diske kurulum sırasında Calamares'in ISO içinden kuracağı önyükleyici paketleri
+grub-pc
+grub-efi
+grub-efi-amd64
+grub-efi-amd64-signed
+shim-signed
+efibootmgr
+cryptsetup
+cryptsetup-initramfs
+keyutils

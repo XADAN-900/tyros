@@ -10,7 +10,7 @@ a2ensite 000-tyros-deny tyros
 sed -i 's/^Listen 80$/Listen 127.0.0.1:80/' /etc/apache2/ports.conf
 systemctl enable apache2 NetworkManager
 
-chmod 755 /usr/local/bin/tyros-session /usr/local/bin/tyros-close /opt/tyros/api/tyros-api.py
+chmod 755 /usr/local/bin/tyros-session /usr/local/bin/tyros-close /usr/local/bin/tyros-install /opt/tyros/api/tyros-api.py
 chmod -R a+rX /opt/tyros
 
 # --- Openbox: arayüz penceresi her zaman altta, çerçevesiz; tek masaüstü ---
@@ -64,6 +64,34 @@ echo "TyrOS 1.0" > /etc/issue.net
 # --- Açılış animasyonu (Plymouth, TyrOS logosu) ---
 plymouth-set-default-theme tyros 2>/dev/null || true
 update-initramfs -u -k all 2>/dev/null || true
+
+# --- Hızlı açılış: açılışı bekleten gereksiz servisleri kapat ---
+systemctl mask NetworkManager-wait-online.service systemd-networkd-wait-online.service \
+  apt-daily.timer apt-daily-upgrade.timer man-db.timer e2scrub_all.timer 2>/dev/null || true
+systemctl set-default graphical.target
+systemctl enable lightdm 2>/dev/null || true
+
+# --- Diske kurulum aracı (Calamares): TyrOS adı ve logosu ---
+B=/etc/calamares/branding/debian
+if [ -f "$B/branding.desc" ]; then
+  sed -i -E \
+    -e 's/^( *productName:).*/\1 TyrOS/' \
+    -e 's/^( *shortProductName:).*/\1 TyrOS/' \
+    -e 's/^( *version:).*/\1 1.0/' \
+    -e 's/^( *shortVersion:).*/\1 1.0/' \
+    -e 's/^( *versionedName:).*/\1 TyrOS 1.0/' \
+    -e 's/^( *shortVersionedName:).*/\1 TyrOS 1.0/' \
+    -e 's/^( *bootloaderEntryName:).*/\1 TyrOS/' \
+    -e 's/^( *SidebarBackground:).*/\1 "#121827"/' \
+    -e 's/^( *SidebarBackgroundCurrent:).*/\1 "#2b2552"/' \
+    "$B/branding.desc"
+  for img in debian-logo.png welcome.png; do cp /usr/share/tyros/logo.png "$B/$img"; done
+fi
+# Debian'ın kendi kurulum kısayolunu gizle (TyrOS'unkini kullanıyoruz)
+for f in /usr/share/applications/calamares-install-debian.desktop /usr/share/applications/calamares.desktop; do
+  if [ -f "$f" ]; then sed -i '/^\[Desktop Entry\]/a NoDisplay=true' "$f"; fi
+done
+rm -f /etc/xdg/autostart/calamares-desktop-icon.desktop
 
 # Türkçe dil ortamı
 sed -i 's/^# *tr_TR.UTF-8/tr_TR.UTF-8/' /etc/locale.gen
