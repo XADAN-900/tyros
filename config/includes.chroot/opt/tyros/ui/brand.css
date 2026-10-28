@@ -66,3 +66,11 @@ html, body, #boot { background: #0b1220; }
 .tr-empty { display: grid; justify-items: center; gap: 8px; padding-top: 70px; }
 .tr-empty .ico { width: 54px; height: 54px; color: var(--mist); opacity: .6; }
 .fm-item[draggable="true"] { -webkit-user-drag: element; }
+
+/* Çerçeveyle seçme */
+.ty-marquee {
+  position: fixed; z-index: 900; pointer-events: none;
+  border: 1px solid var(--accent); border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+#desktop, .fm-list { user-select: none; }

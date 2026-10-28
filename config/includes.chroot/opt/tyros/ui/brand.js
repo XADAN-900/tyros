@@ -433,3 +433,77 @@ window.addEventListener('DOMContentLoaded', () => {
     if (sig !== desktopSig) Shell.renderDesktop();
   }, 4000);
 });
+
+/* ------------------------------------------------------------ fareyle çerçeve çizerek seçme
+   Masaüstünde ve Dosyalar penceresinde boş bir yerden sürükleyince seçim kutusu çıkar;
+   kutunun değdiği simgeler seçilir. Ctrl/Shift ile mevcut seçime eklenir, Ctrl+tık tek tek seçer. */
+function startMarquee(e, area, itemSel) {
+  const additive = e.ctrlKey || e.shiftKey || e.metaKey;
+  const items = $$(itemSel, area === document.body ? document : area.closest('.fm') || document);
+  const before = new Set(additive ? items.filter(i => i.classList.contains('sel')) : []);
+  const sx = e.clientX, sy = e.clientY;
+  const bounds = area.getBoundingClientRect();
+  let box = null;
+  const move = ev => {
+    const x = Math.max(bounds.left, Math.min(bounds.right, ev.clientX)), y = Math.max(bounds.top, Math.min(bounds.bottom, ev.clientY));
+    if (!box) {
+      if (Math.abs(x - sx) < 4 && Math.abs(y - sy) < 4) return;
+      box = h('div', { class: 'ty-marquee' }); document.body.append(box);
+    }
+    const r = { left: Math.min(sx, x), top: Math.min(sy, y), right: Math.max(sx, x), bottom: Math.max(sy, y) };
+    Object.assign(box.style, { left: r.left + 'px', top: r.top + 'px', width: r.right - r.left + 'px', height: r.bottom - r.top + 'px' });
+    for (const it of items) {
+      const b = it.getBoundingClientRect();
+      const hit = b.left < r.right && b.right > r.left && b.top < r.bottom && b.bottom > r.top;
+      it.classList.toggle('sel', before.has(it) || hit);
+    }
+  };
+  const up = () => {
+    window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+    if (box) { box.remove(); window.__marqueeJustEnded = true; setTimeout(() => { window.__marqueeJustEnded = false; }, 0); }
+    else if (!additive) items.forEach(i => i.classList.remove('sel'));
+  };
+  window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  e.preventDefault();
+}
+document.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  const list = e.target.closest('.fm-list');
+  if (list) { if (!e.target.closest('.fm-item')) startMarquee(e, list, '.fm-item'); return; }
+  if (e.target.closest('#desktop') && !e.target.closest('.dicon, .win')) startMarquee(e, $('#desktop'), '#desktopIcons .dicon');
+}, true);
+
+// Ctrl + tık: seçime ekle / çıkar
+document.addEventListener('click', e => {
+  const icon = e.target.closest?.('.dicon, .fm-item');
+  if (!icon || !(e.ctrlKey || e.metaKey)) return;
+  icon.classList.toggle('sel'); e.stopPropagation(); e.preventDefault();
+}, true);
+
+/** Seçili dosya yolları: Dosyalar penceresi odaktaysa oradakiler, değilse masaüstündekiler */
+function selectedPaths(from) {
+  const fm = from?.closest?.('.fm');
+  if (fm) {
+    const dir = fm.querySelector('.fm-path')?.value;
+    return dir ? $$('.fm-item.sel', fm).map(i => (dir === '/' ? '' : dir) + '/' + i.title) : [];
+  }
+  return DESKTOP_DIR ? $$('#desktopIcons .dicon.sel[draggable="true"]').map(d => DESKTOP_DIR + '/' + d.title) : [];
+}
+
+// Birden çok seçili öğeyi birlikte sürükle
+document.addEventListener('dragstart', e => {
+  const icon = e.target.closest?.('.dicon[draggable="true"], .fm-item');
+  if (!icon || !icon.classList.contains('sel')) return;
+  const paths = selectedPaths(icon);
+  if (paths.length > 1) e.dataTransfer.setData('text/tyros-path', paths.join('\n'));
+});
+
+// Delete: seçili öğelerin hepsini çöpe at
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Delete' || e.target.closest?.('input, textarea, [contenteditable="true"], .ty-dialog')) return;
+  const inFm = document.activeElement?.closest?.('.fm');
+  const paths = selectedPaths(inFm || null);
+  if (!paths.length) return;
+  e.stopPropagation(); e.preventDefault();
+  Trash.put(paths).catch(fail);
+}, true);
