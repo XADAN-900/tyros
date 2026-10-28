@@ -82,7 +82,7 @@ BUILTIN.settings.launch = (section = 'look') => {
   function look() {
     const walls = h('div', { class: 'walls' });
     for (const [id, w] of Object.entries(WALLPAPERS)) {
-      walls.append(h('button', { class: 'wall' + (Settings.data.wallpaper === id ? ' on' : ''), 'aria-label': w.name, html: wallpaperSVG(id) + `<span>${esc(w.name)}</span>`,
+      walls.append(h('button', { class: 'wall' + (Settings.data.wallpaper === id ? ' on' : ''), 'aria-label': w.name, html: wallpaperSVG(id, true) + `<span>${esc(w.name)}</span>`,
         onclick: () => { Settings.set({ wallpaper: id }); show('look'); } }));
     }
     const sw = h('div', { class: 'swatches' }, ACCENTS.map(a =>

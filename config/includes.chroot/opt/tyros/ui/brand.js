@@ -233,8 +233,10 @@ document.addEventListener('load', e => {
 for (const k of Object.keys(WALLPAPERS)) delete WALLPAPERS[k];
 [['tyros', 'TyrOS'], ['akis', 'Akış'], ['kuzey', 'Kuzey ışıkları'], ['kum', 'Kum tepeleri'], ['okyanus', 'Okyanus']]
   .forEach(([id, name]) => { WALLPAPERS[id] = { name, img: `img/wall/${id}.jpg` }; });
-function wallpaperSVG(id) {
+function wallpaperSVG(id, small) {
   const w = WALLPAPERS[id] || WALLPAPERS.tyros;
+  // Ayarlar'daki küçük önizlemeler için hafif küçük resim (4K resmi 5 kez açıp RAM harcamasın)
+  if (small === true) return `<div class="wp-img" style="background-image:url('${w.img.replace(/\.jpg$/, '-k.jpg')}')"></div>`;
   // SVG içindeki resim Chromium'da kalitesiz küçültülüyordu; CSS arka planı yüksek kaliteli ölçeklenir
   return `<div class="wp-img" style="background-image:url('${w.img}')"></div>`;
 }
