@@ -622,4 +622,56 @@ window.addEventListener('DOMContentLoaded', () => {
     layoutDesktop();
   });
 });
+
+/* ================================================================ ÇOKLU SEÇİM: sağ tık menüsü ve Enter
+   Fareyle çerçeve çizip ya da Ctrl+tık ile birden çok öğe seçilince, Windows'taki gibi
+   sağ tık menüsü hepsine birden uygulanır: Aç, Çöpe taşı, Yolu kopyala, Seçimi kaldır. */
+async function openPaths(paths) {
+  if (!paths.length) return;
+  const kinds = (await tryRun(paths.map(p => `[ -d ${q(p)} ] && echo D || echo F`).join('; '))).trim().split('\n');
+  paths.forEach((p, i) => {
+    if (kinds[i] === 'D') BUILTIN.files.launch(p);
+    else API.post('/api/open', { path: p }).catch(fail);
+  });
+}
+function openSelection(fm, els, paths) {
+  if (fm) return openPaths(paths);
+  // Masaüstü: her simgeyi çift tıklanmış gibi aç (uygulama, dosya, çöp…)
+  els.forEach(b => b.isConnected && b.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+}
+document.addEventListener('contextmenu', e => {
+  const icon = e.target.closest?.('#desktopIcons .dicon, .fm-item');
+  if (!icon || !icon.classList.contains('sel')) return;
+  const fm = icon.closest('.fm');
+  const sel = fm ? $$('.fm-item.sel', fm) : $$('#desktopIcons .dicon.sel');
+  if (sel.length < 2) return;            // tek öğe: her zamanki menü
+  e.preventDefault(); e.stopPropagation();
+  const paths = selectedPaths(fm || null);
+  const n = sel.length;
+  Shell.contextMenu(e.clientX, e.clientY, [
+    [`${n} öğeyi aç`, () => openSelection(fm, sel, paths)],
+    paths.length ? [`${paths.length} öğeyi çöpe taşı`, () => Trash.put(paths).catch(fail)] : null,
+    paths.length ? ['Yollarını kopyala', () => navigator.clipboard.writeText(paths.join('\n')).then(() => notify('Kopyalandı', `${paths.length} dosya yolu`)).catch(fail)] : null,
+    '-',
+    ['Seçimi kaldır', () => sel.forEach(x => x.classList.remove('sel'))],
+  ]);
+}, true);
+// Enter: birden çok öğe seçiliyse hepsini aç
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.target.closest?.('input, textarea, select, [contenteditable="true"], .ty-dialog')) return;
+  const fm = document.activeElement?.closest?.('.fm');
+  const sel = fm ? $$('.fm-item.sel', fm) : $$('#desktopIcons .dicon.sel');
+  if (sel.length < 2) return;
+  e.preventDefault(); e.stopPropagation();
+  openSelection(fm, sel, selectedPaths(fm || null));
+}, true);
+
+/* Arayüzde geliştirici araçları kısayollarını kapat (yanlışlıkla açılınca
+   ekranda "268px × 600px" gibi ölçüler çıkıyordu) */
+document.addEventListener('keydown', e => {
+  const k = e.key.toUpperCase();
+  if (k === 'F12' || (e.ctrlKey && e.shiftKey && ['I', 'J', 'C', 'K'].includes(k)) || (e.ctrlKey && k === 'U')) {
+    e.preventDefault(); e.stopPropagation();
+  }
+}, true);
 })();

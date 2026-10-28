@@ -184,7 +184,7 @@ window.addEventListener('DOMContentLoaded', () => {
     reboot: { title: 'Yeniden başlatılsın mı?', msg: 'Açık uygulamalar kapanacak.', ok: 'Yeniden başlat', screen: 'Yeniden başlatılıyor…',
       cmd: 'systemctl reboot -i || sudo -n systemctl reboot' },
     logout: { title: 'Oturum kapatılsın mı?', msg: 'Açık uygulamalar kapanacak.', ok: 'Oturumu kapat', screen: 'Oturum kapatılıyor…',
-      cmd: 'openbox --exit' },
+      cmd: 'setsid -f /usr/local/bin/tyros-logout >/dev/null 2>&1' },
   };
   Shell.power = async function (action) {
     const p = POWER[action];
