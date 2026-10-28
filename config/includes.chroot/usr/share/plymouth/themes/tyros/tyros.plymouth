@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TyrOS
+Description=TyrOS açılış ekranı
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/tyros
+ScriptFile=/usr/share/plymouth/themes/tyros/tyros.script

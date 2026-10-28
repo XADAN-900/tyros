@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TyrOS</title>
+  <link rel="icon" href="img/logo.png">
   <link rel="stylesheet" href="tyros.css">
+  <link rel="stylesheet" href="brand.css">
 </head>
 <body>
   <!-- Açılış ekranı -->
   <div id="boot">
-    <svg class="boot-rune" viewBox="0 0 100 100" aria-hidden="true">
-      <path d="M24 40 L50 12 L76 40 M50 12 V88" />
-    </svg>
+    <img class="boot-logo" src="img/logo.png" alt="">
     <div class="boot-name">TyrOS</div>
     <div class="boot-status" id="bootStatus">Sistem başlatılıyor</div>
   </div>
@@ -63,7 +63,7 @@
   <!-- Görev çubuğu -->
   <footer id="taskbar">
     <button id="startBtn" title="Başlat (Super)" aria-label="Başlat menüsü">
-      <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M26 40 L50 14 L74 40 M50 14 V86"/></svg>
+      <img src="img/logo.png" alt="">
     </button>
     <div id="pinned"></div>
     <div class="tb-sep"></div>
@@ -82,6 +82,7 @@
   <script src="js/core.js"></script>
   <script src="js/wm.js"></script>
   <script src="js/apps.js"></script>
+  <script src="brand.js"></script>
   <script src="js/shell.js"></script>
 </body>
 </html>

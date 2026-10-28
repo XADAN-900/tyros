@@ -1,0 +1,40 @@
+# TyrOS açılış animasyonu: koyu zemin üzerinde nefes alan logo
+Window.SetBackgroundTopColor(0.055, 0.086, 0.157);
+Window.SetBackgroundBottomColor(0.031, 0.051, 0.094);
+
+logo.image = Image("logo.png");
+logo.sprite = Sprite(logo.image);
+logo.sprite.SetX(Window.GetX() + Window.GetWidth() / 2 - logo.image.GetWidth() / 2);
+logo.sprite.SetY(Window.GetY() + Window.GetHeight() / 2 - logo.image.GetHeight() / 2);
+logo.sprite.SetOpacity(0);
+
+tick = 0;
+fun refresh_callback ()
+{
+    tick++;
+    if (tick < 40)
+        logo.sprite.SetOpacity(tick / 40);
+    else
+        logo.sprite.SetOpacity(0.8 + 0.2 * Math.Cos((tick - 40) / 18));
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# Şifre sorulursa (şifreli disk) basit bir kutu göster
+fun display_password_callback (prompt, bullets)
+{
+    text = "";
+    for (i = 0; i < bullets; i++)
+        text += "*";
+    pw.image = Image.Text(prompt + "  " + text, 0.9, 0.93, 0.95);
+    pw.sprite = Sprite(pw.image);
+    pw.sprite.SetX(Window.GetX() + Window.GetWidth() / 2 - pw.image.GetWidth() / 2);
+    pw.sprite.SetY(Window.GetY() + Window.GetHeight() * 0.75);
+}
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+fun display_normal_callback ()
+{
+    if (pw.sprite)
+        pw.sprite.SetOpacity(0);
+}
+Plymouth.SetDisplayNormalFunction(display_normal_callback);

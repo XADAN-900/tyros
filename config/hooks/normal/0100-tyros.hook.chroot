@@ -57,8 +57,13 @@ ID=tyros
 ID_LIKE=debian
 HOME_URL="https://www.debian.org/"
 OS
-printf 'TyrOS 1.0 \\n \\l\n\n' > /etc/issue
+# Konsol açılış yazılarını gizle (ekran temizlenir, doğrudan arayüz açılır)
+printf '\033c' > /etc/issue
 echo "TyrOS 1.0" > /etc/issue.net
+
+# --- Açılış animasyonu (Plymouth, TyrOS logosu) ---
+plymouth-set-default-theme tyros 2>/dev/null || true
+update-initramfs -u -k all 2>/dev/null || true
 
 # Türkçe dil ortamı
 sed -i 's/^# *tr_TR.UTF-8/tr_TR.UTF-8/' /etc/locale.gen

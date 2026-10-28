@@ -4,7 +4,7 @@
 LOG="$HOME/.cache/tyros"
 mkdir -p "$LOG" "$HOME/.config/tyros"
 xset s off 2>/dev/null
-xsetroot -solid '#0b141c' 2>/dev/null
+xsetroot -solid '#0b1220' 2>/dev/null
 xdg-user-dirs-update 2>/dev/null
 
 # 1) Sistem köprüsü — çökerse kendini yeniden başlatır
@@ -33,6 +33,26 @@ for _ in $(seq 1 60); do
 done
 
 read -r W H < <(xdpyinfo 2>/dev/null | awk '/dimensions:/{split($2,a,"x"); print a[1], a[2]}')
+
+# Arayüz penceresi her zaman tüm ekranı kaplasın: ekran çözünürlüğü değişirse
+# (ör. sanal makine penceresi büyütülünce) ya da pencere eksik boyutta açılırsa düzelt.
+( while sleep 2; do
+    read -r SW SH < <(xdotool getdisplaygeometry 2>/dev/null)
+    [ -n "$SH" ] || continue
+    best=""; best_area=0
+    for wid in $(xdotool search --onlyvisible --class TyrOSShell 2>/dev/null); do
+      eval "$(xdotool getwindowgeometry --shell "$wid" 2>/dev/null)" || continue
+      area=$(( ${WIDTH:-0} * ${HEIGHT:-0} ))
+      if [ "$area" -gt "$best_area" ]; then
+        best=$wid; best_area=$area; BW=$WIDTH; BH=$HEIGHT; BX=$X; BY=$Y
+      fi
+    done
+    [ -n "$best" ] || continue
+    if [ "$BW" -ne "$SW" ] || [ "$BH" -ne "$SH" ] || [ "$BX" -ne 0 ] || [ "$BY" -ne 0 ]; then
+      xdotool windowmove "$best" 0 0 windowsize "$best" "$SW" "$SH" 2>/dev/null
+    fi
+  done ) &
+
 BROWSER=$(command -v chromium || command -v chromium-browser)
 
 # Arayüz penceresi: tam ekran, çerçevesiz, her zaman diğer uygulamaların altında.

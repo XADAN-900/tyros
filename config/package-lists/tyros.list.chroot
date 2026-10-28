@@ -13,6 +13,7 @@ keyboard-configuration
 console-setup
 dbus-user-session
 polkitd
+plymouth
 
 # --- Donanım sürücüleri (firmware) ---
 firmware-linux

@@ -6,7 +6,8 @@ cd "$(dirname "$0")"
 docker run --rm --privileged -v "$PWD":/build -w /build debian:trixie bash -euxc '
   apt-get update
   apt-get install -y live-build debootstrap squashfs-tools xorriso isolinux syslinux-common \
-    grub-pc-bin grub-efi-amd64-bin mtools dosfstools
+    grub-pc-bin grub-efi-amd64-bin mtools dosfstools python3-pil fonts-dejavu-core
+  python3 tools/make-assets.py
   chmod +x auto/* config/hooks/normal/*.hook.chroot config/includes.chroot/usr/local/bin/* config/includes.chroot/opt/tyros/api/*.py
   lb clean --purge || true
   lb config
