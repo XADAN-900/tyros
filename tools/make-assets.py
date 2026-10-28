@@ -6,7 +6,7 @@ Derlemeden önce çalışır (ISO derleme betikleri bunu otomatik yapar):
   - sistem logosu (kurulum, giriş) -> config/includes.chroot/usr/share/tyros/logo.png
   - açılış animasyonu logosu -> config/includes.chroot/usr/share/plymouth/themes/tyros/logo.png
   - BIOS açılış menüsü       -> config/bootloaders/isolinux/splash.png  (640x480)
-  - UEFI açılış menüsü       -> config/bootloaders/grub-pc/splash.png   (800x600)
+  - UEFI açılış menüsü       -> config/bootloaders/grub-pc/splash.png   (1920x1080, ekrana sığdırılır)
 Gerekli: python3-pil, fonts-dejavu-core
 """
 import os
@@ -51,6 +51,6 @@ LOGO = Image.open(os.path.join(ROOT, "branding", "logo.webp")).convert("RGBA")
 logo(256).save(path("config/includes.chroot/opt/tyros/ui/img/logo.png"))
 logo(256).save(path("config/includes.chroot/usr/share/tyros/logo.png"))
 logo(200).save(path("config/includes.chroot/usr/share/plymouth/themes/tyros/logo.png"))
-splash(640, 480, 180, 34, 30, 222).save(path("config/bootloaders/isolinux/splash.png"))
-splash(800, 600, 230, 48, 38, 290).save(path("config/bootloaders/grub-pc/splash.png"))
+splash(640, 480, 150, 30, 26, 186).save(path("config/bootloaders/isolinux/splash.png"))
+splash(1920, 1080, 320, 150, 56, 488).save(path("config/bootloaders/grub-pc/splash.png"))
 print("TyrOS görselleri hazır")
