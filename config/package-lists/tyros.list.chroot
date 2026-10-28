@@ -33,7 +33,7 @@ xdotool
 # --- TyrOS çekirdeği: httpd + köprü + arayüz motoru ---
 apache2
 python3
-ttyd
+# ttyd Debian 13 deposunda yok; derleme kancası resmi sürümü indirir
 curl
 chromium
 
