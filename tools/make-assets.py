@@ -47,7 +47,9 @@ def splash(w, h, logo_size, logo_top, text_size, text_top):
     return img.convert("RGB")
 
 
-LOGO = Image.open(os.path.join(ROOT, "branding", "logo.webp")).convert("RGBA")
+# Yüksek çözünürlüklü logo varsa onu kullan (küçültmeler ve duvar kağıdı daha net olur)
+_HD = os.path.join(ROOT, "branding", "logo-hd.webp")
+LOGO = Image.open(_HD if os.path.exists(_HD) else os.path.join(ROOT, "branding", "logo.webp")).convert("RGBA")
 
 logo(256).save(path("config/includes.chroot/opt/tyros/ui/img/logo.png"))
 logo(256).save(path("config/includes.chroot/usr/share/tyros/logo.png"))
