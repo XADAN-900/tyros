@@ -85,6 +85,9 @@ gparted
 calamares
 calamares-settings-debian
 
+# --- Kararlılık: sıkıştırılmış takas (az RAM'li bilgisayarlar için) ---
+zram-tools
+
 # --- Komut satırı araçları ---
 htop
 nano
