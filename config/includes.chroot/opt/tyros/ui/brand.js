@@ -235,7 +235,8 @@ for (const k of Object.keys(WALLPAPERS)) delete WALLPAPERS[k];
   .forEach(([id, name]) => { WALLPAPERS[id] = { name, img: `img/wall/${id}.jpg` }; });
 function wallpaperSVG(id) {
   const w = WALLPAPERS[id] || WALLPAPERS.tyros;
-  return `<svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><image href="${w.img}" width="1600" height="900" preserveAspectRatio="xMidYMid slice"/></svg>`;
+  // SVG içindeki resim Chromium'da kalitesiz küçültülüyordu; CSS arka planı yüksek kaliteli ölçeklenir
+  return `<div class="wp-img" style="background-image:url('${w.img}')"></div>`;
 }
 
 /* ------------------------------------------------------------ çöp kutusu */

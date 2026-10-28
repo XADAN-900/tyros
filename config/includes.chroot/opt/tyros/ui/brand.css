@@ -153,3 +153,7 @@ html, body, #boot { background: #0b1220; }
 /* Masaüstü simgeleri: serbest yerleşim (ızgaraya oturur) */
 #desktopIcons { display: block !important; right: 14px; pointer-events: none; }
 #desktopIcons .dicon { position: absolute; pointer-events: auto; transition: left .12s ease, top .12s ease; }
+
+/* Duvar kağıdı: yüksek kaliteli ölçekleme */
+.wp-img { position: absolute; inset: 0; background-position: center; background-size: cover; background-repeat: no-repeat; }
+.wall .wp-img { border-radius: inherit; }

@@ -537,6 +537,26 @@ function gridSize() {
   const r = box.getBoundingClientRect();
   return { box, rect: r, cols: Math.max(1, Math.floor(r.width / CELL_W)), rows: Math.max(1, Math.floor(r.height / CELL_H)) };
 }
+/* Masaüstünden kaldırılan uygulama simgeleri (uygulamanın kendisi silinmez) */
+const isAppIcon = b => !b.classList.contains('dfile') && !b.classList.contains('trash');
+function hideIcons() {
+  const hidden = new Set(Settings.data.hiddenIcons || []);
+  if (!hidden.size) return;
+  $$('#desktopIcons .dicon').forEach(b => { if (isAppIcon(b) && hidden.has(iconKey(b))) b.remove(); });
+}
+async function removeFromDesktop(els, ask = true) {
+  const apps = els.filter(isAppIcon);
+  if (!apps.length) return;
+  const names = apps.map(b => b.lastElementChild?.textContent || '').filter(Boolean);
+  if (ask && !(await tyrosConfirm(`${names.join(', ')} masaüstünden kaldırılacak. Uygulamalar silinmez; başlat menüsünden açabilir, sağ tık > "Gizlenen simgeleri geri getir" ile geri koyabilirsin.`,
+    { title: 'Masaüstünden kaldırılsın mı?', ok: 'Kaldır' }))) return;
+  const hidden = new Set(Settings.data.hiddenIcons || []);
+  apps.forEach(b => { hidden.add(iconKey(b)); b.remove(); });
+  Settings.data.hiddenIcons = [...hidden];
+  Settings.set({ hiddenIcons: [...hidden] });
+  hideIcons();                       // masaüstü bu arada yeniden çizildiyse de gizle
+  layoutDesktop();
+}
 function layoutDesktop() {
   const g = gridSize();
   if (!g.box) return;
@@ -570,8 +590,10 @@ window.addEventListener('DOMContentLoaded', () => {
   const inner = Shell.renderDesktop.bind(Shell);
   Shell.renderDesktop = async function () {
     const p = inner();
+    hideIcons();
     layoutDesktop();                 // uygulama simgeleri hemen yerleşsin
     await p;
+    hideIcons();
     $$('#desktopIcons .dicon').forEach(b => b.setAttribute('draggable', 'true'));
     layoutDesktop();
   };
@@ -650,12 +672,43 @@ document.addEventListener('contextmenu', e => {
   const n = sel.length;
   Shell.contextMenu(e.clientX, e.clientY, [
     [`${n} öğeyi aç`, () => openSelection(fm, sel, paths)],
-    paths.length ? [`${paths.length} öğeyi çöpe taşı`, () => Trash.put(paths).catch(fail)] : null,
+    [`Sil (${n} öğe)`, async () => {
+      if (!fm) await removeFromDesktop(sel);
+      if (paths.length) Trash.put(paths).catch(fail);
+    }],
     paths.length ? ['Yollarını kopyala', () => navigator.clipboard.writeText(paths.join('\n')).then(() => notify('Kopyalandı', `${paths.length} dosya yolu`)).catch(fail)] : null,
     '-',
     ['Seçimi kaldır', () => sel.forEach(x => x.classList.remove('sel'))],
   ]);
 }, true);
+// Tek uygulama simgesine sağ tık: Aç / Masaüstünden kaldır
+document.addEventListener('contextmenu', e => {
+  const icon = e.target.closest?.('#desktopIcons .dicon');
+  if (!icon || !isAppIcon(icon) || $$('#desktopIcons .dicon.sel').length > 1) return;
+  e.preventDefault(); e.stopPropagation();
+  $$('.dicon.sel').forEach(x => x.classList.remove('sel')); icon.classList.add('sel');
+  Shell.contextMenu(e.clientX, e.clientY, [
+    ['Aç', () => icon.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))],
+    ['Masaüstünden kaldır', () => removeFromDesktop([icon])],
+  ]);
+}, true);
+// Delete: seçili uygulama simgelerini masaüstünden kaldır (dosyalar zaten çöpe gider)
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Delete' || e.target.closest?.('input, textarea, select, [contenteditable="true"], .ty-dialog, .fm')) return;
+  const apps = $$('#desktopIcons .dicon.sel').filter(isAppIcon);
+  if (apps.length) removeFromDesktop(apps);
+}, true);
+// Masaüstü boş alan menüsüne "Gizlenen simgeleri geri getir"
+window.addEventListener('DOMContentLoaded', () => {
+  const orig = Shell.contextMenu.bind(Shell);
+  Shell.contextMenu = function (x, y, items) {
+    if ((Settings.data.hiddenIcons || []).length && items.some(i => Array.isArray(i) && i[0] === 'Terminal aç')) {
+      items = [...items, '-', ['Gizlenen simgeleri geri getir', () => { Settings.set({ hiddenIcons: [] }); Shell.renderDesktop(); }]];
+    }
+    return orig(x, y, items);
+  };
+});
+
 // Enter: birden çok öğe seçiliyse hepsini aç
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || e.target.closest?.('input, textarea, select, [contenteditable="true"], .ty-dialog')) return;
