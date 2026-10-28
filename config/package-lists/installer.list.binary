@@ -1,5 +1,5 @@
-# Diske kurulum sırasında Calamares'in ISO içinden kuracağı önyükleyici paketleri
-grub-pc
+# Diske kurulum (UEFI): Calamares bu paketleri ISO içinden kurar.
+# Not: grub-pc ile çakıştığı için BIOS paketi ayrı listede (grub-bios.list.binary).
 grub-efi
 grub-efi-amd64
 grub-efi-amd64-signed
