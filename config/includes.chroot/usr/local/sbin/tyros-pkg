@@ -1,0 +1,21 @@
+#!/bin/sh
+# TyrOS Uygulama Mağazası yardımcısı — yalnızca güvenli apt işlemleri (sudoers ile şifresiz)
+set -e
+export DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8
+ACTION="$1"; NAME="$2"
+valid() { printf '%s' "$1" | grep -Eq '^[a-z0-9][a-z0-9+.-]{0,100}$'; }
+lists_empty() { ! ls /var/lib/apt/lists/ 2>/dev/null | grep -q '_Packages'; }
+case "$ACTION" in
+  update) exec apt-get update ;;
+  install)
+    valid "$NAME" || { echo "Geçersiz paket adı" >&2; exit 2; }
+    if lists_empty; then apt-get update; fi
+    exec apt-get install -y --no-install-recommends -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold -- "$NAME" ;;
+  remove)
+    valid "$NAME" || { echo "Geçersiz paket adı" >&2; exit 2; }
+    case "$NAME" in apache2|apache2-*|chromium|chromium-*|openbox|lightdm|xserver-xorg*|systemd*|sudo|apt|dpkg|libc6|linux-image-*|network-manager|plymouth*|python3|bash)
+      echo "$NAME sistem için gerekli, kaldırılamaz." >&2; exit 3 ;; esac
+    exec apt-get remove -y -- "$NAME" ;;
+  clean) apt-get clean; exec apt-get autoremove -y ;;
+  *) echo "Kullanım: tyros-pkg update|install AD|remove AD|clean" >&2; exit 2 ;;
+esac
