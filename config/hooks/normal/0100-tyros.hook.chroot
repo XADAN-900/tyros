@@ -64,6 +64,40 @@ OS
 printf '\033c' > /etc/issue
 echo "TyrOS 1.0" > /etc/issue.net
 
+# --- Boyut küçültme (özellikler etkilenmez) ---
+# Masaüstü bilgisayarlarda hiç kullanılmayan büyük bellenimler (ağ anahtarı çipi, veri merkezi
+# ekran kartı, sunucu ağ kartları, telefon santrali) ve İngilizce konuşma tanıma verisi.
+# Başka bir paket bunlara gerçekten bağlıysa dpkg kaldırmayı reddeder; o zaman paket yerinde kalır.
+for p in firmware-marvell-prestera firmware-nvidia-tesla-535-gsp firmware-netronome firmware-qlogic \
+         firmware-cavium firmware-myricom firmware-netxen dahdi-firmware-nonfree pocketsphinx-en-us; do
+  if dpkg -s "$p" >/dev/null 2>&1; then dpkg -r "$p" >/dev/null 2>&1 || echo "Not: $p kaldırılamadı, yerinde bırakıldı"; fi
+done
+# Belgeler (lisans dosyaları kalır), Türkçe/İngilizce dışındaki çeviriler
+find /usr/share/doc -mindepth 1 ! -type d ! -name copyright -delete 2>/dev/null || true
+find /usr/share/doc -mindepth 1 -type d -empty -delete 2>/dev/null || true
+rm -rf /usr/share/info/* /usr/share/lintian /usr/share/linda 2>/dev/null || true
+for d in /usr/share/locale/*/; do
+  case "$(basename "$d")" in tr|tr_*|en|en_*) ;; *) rm -rf "$d" ;; esac
+done
+for d in /usr/share/man/*/; do
+  case "$(basename "$d")" in man*|tr|tr_*) ;; *) rm -rf "$d" ;; esac
+done
+for d in /usr/share/help/*/; do
+  case "$(basename "$d")" in C|tr|tr_*|en|en_*) ;; *) rm -rf "$d" ;; esac
+done
+if [ -f /usr/lib/chromium/locales/en-US.pak ]; then
+  find /usr/lib/chromium/locales -name '*.pak' ! -name 'en-US.pak' ! -name 'tr.pak' -delete
+fi
+
+# --- Az kaynak, kararlı çalışma ---
+# RAM'in yarısı kadar sıkıştırılmış takas (zram): bellek dolunca donma yerine sıkıştırır
+if [ -f /etc/default/zramswap ]; then
+  sed -i -E 's/^#? *ALGO=.*/ALGO=zstd/; s/^#? *PERCENT=.*/PERCENT=50/; s/^#? *PRIORITY=.*/PRIORITY=100/' /etc/default/zramswap
+fi
+mkdir -p /etc/systemd/journald.conf.d /etc/sysctl.d
+printf '[Journal]\nSystemMaxUse=50M\nRuntimeMaxUse=30M\n' > /etc/systemd/journald.conf.d/tyros.conf
+printf 'vm.swappiness=100\nvm.vfs_cache_pressure=50\n' > /etc/sysctl.d/90-tyros.conf
+
 # --- Açılış animasyonu (Plymouth, TyrOS logosu) ---
 plymouth-set-default-theme tyros 2>/dev/null || true
 update-initramfs -u -k all 2>/dev/null || true
