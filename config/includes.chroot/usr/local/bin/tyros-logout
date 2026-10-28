@@ -1,0 +1,17 @@
+#!/bin/bash
+# TyrOS: oturumu temiz kapat — arayüzün tüm arka plan süreçlerini sonlandırıp
+# pencere yöneticisinden çık. Tekrar girişte eski süreçler kalmaz.
+PIDFILE="$HOME/.cache/tyros/session.pgid"
+openbox --exit 2>/dev/null
+sleep 0.3
+if [ -f "$PIDFILE" ]; then
+  PG=$(cat "$PIDFILE" 2>/dev/null)
+  rm -f "$PIDFILE"
+  if [ -n "$PG" ] && tr '\0' ' ' < "/proc/$PG/cmdline" 2>/dev/null | grep -q 'tyros-session'; then
+    kill -TERM -- "-$PG" 2>/dev/null
+  fi
+fi
+pkill -u "$(id -u)" -f 'class=TyrOSShell' 2>/dev/null
+pkill -u "$(id -u)" -x ttyd 2>/dev/null
+pkill -u "$(id -u)" -f '/opt/tyros/api/tyros-api.py' 2>/dev/null
+exit 0

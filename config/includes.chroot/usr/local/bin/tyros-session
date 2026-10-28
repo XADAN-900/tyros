@@ -1,8 +1,34 @@
 #!/bin/bash
 # TyrOS grafik oturumu — openbox autostart tarafından başlatılır.
 # 1) sistem köprüsü (API)  2) terminal (ttyd)  3) HTML arayüzü (Chromium uygulama modu)
+# Kendi süreç grubunda çalış: oturum kapanınca hepsi birlikte temizlenebilsin
+if [ -z "$TYROS_SETSID" ]; then
+  export TYROS_SETSID=1
+  exec setsid "$0" "$@"
+fi
 LOG="$HOME/.cache/tyros"
 mkdir -p "$LOG" "$HOME/.config/tyros"
+PIDFILE="$HOME/.cache/tyros/session.pgid"
+
+# Önceki oturumdan kalan TyrOS süreçlerini temizle (çıkış yapıp tekrar girince
+# eski köprü/terminal/arayüz döngüleri yeni oturumla çakışmasın)
+if [ -f "$PIDFILE" ]; then
+  OLD=$(cat "$PIDFILE" 2>/dev/null)
+  # Sadece gerçekten eski bir tyros-session ise kapat (numara başka sürece geçmiş olabilir)
+  if [ -n "$OLD" ] && [ "$OLD" != "$$" ] && tr '\0' ' ' < "/proc/$OLD/cmdline" 2>/dev/null | grep -q 'tyros-session'; then
+    kill -TERM -- "-$OLD" 2>/dev/null
+  fi
+fi
+pkill -u "$(id -u)" -f '/opt/tyros/api/tyros-api.py' 2>/dev/null
+pkill -u "$(id -u)" -x ttyd 2>/dev/null
+pkill -u "$(id -u)" -f 'class=TyrOSShell' 2>/dev/null
+sleep 0.5
+echo "$$" > "$PIDFILE"
+
+# Ekran (X) kapanınca bu oturumun tüm süreçlerini kapat
+cleanup() { rm -f "$PIDFILE"; trap - TERM EXIT; kill -TERM -- "-$$" 2>/dev/null; }
+trap cleanup TERM EXIT
+
 xset s off 2>/dev/null
 xsetroot -solid '#0b1220' 2>/dev/null
 xdg-user-dirs-update 2>/dev/null
@@ -38,7 +64,7 @@ read -r W H < <(xdpyinfo 2>/dev/null | awk '/dimensions:/{split($2,a,"x"); print
 
 # Arayüz penceresi her zaman tüm ekranı kaplasın: ekran çözünürlüğü değişirse
 # (ör. sanal makine penceresi büyütülünce) ya da pencere eksik boyutta açılırsa düzelt.
-( while sleep 2; do
+( while sleep 2 && xset q >/dev/null 2>&1; do
     read -r SW SH < <(xdotool getdisplaygeometry 2>/dev/null)
     [ -n "$SH" ] || continue
     best=""; best_area=0
@@ -62,7 +88,7 @@ export GOOGLE_API_KEY=no GOOGLE_DEFAULT_CLIENT_ID=no GOOGLE_DEFAULT_CLIENT_SECRE
 
 # Arayüz penceresi: tam ekran, çerçevesiz, her zaman diğer uygulamaların altında.
 # Kapanırsa (ör. Ctrl+W) hemen yeniden açılır.
-while true; do
+while xset q >/dev/null 2>&1; do
   # Önceki kapanış düzgün değilse çıkan "Sayfalar geri yüklensin mi?" balonunu engelle
   [ -f "$PREF" ] && sed -i -e 's/"exited_cleanly":false/"exited_cleanly":true/' \
     -e 's/"exit_type":"[A-Za-z]*"/"exit_type":"Normal"/' "$PREF"
@@ -80,3 +106,4 @@ while true; do
     >>"$LOG/shell.log" 2>&1
   sleep 1
 done
+# Ekran gitti (oturum kapandı): cleanup (trap) her şeyi kapatır
