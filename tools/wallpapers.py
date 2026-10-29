@@ -154,16 +154,25 @@ def w_ocean(logo):
 WALLS = [('tyros', 'TyrOS', w_tyros), ('akis', 'Akış', w_flow), ('kuzey', 'Kuzey ışıkları', w_aurora),
          ('kum', 'Kum tepeleri', w_dunes), ('okyanus', 'Okyanus', w_ocean)]
 
+CUSTOM_NAMES = {
+    'tyros': ['Kozmik Mavi-Mor Şerit Amblemi'],
+    'akis': ['Neon Işık Dalgalarının Kesişimi'],
+    'kuzey': ['Yıldızlı Gökyüzünde Kuzey Işıkları'],
+    'kum': ['Mor Dune Tepelerinde Gün Batımı'],
+    'okyanus': ['Katmanlı Mavi Dalga Manzarası'],
+}
+
+
 def build(logo, outdir):
     import os
     os.makedirs(outdir, exist_ok=True)
     src = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'branding', 'wallpapers')
     for key, _name, fn in WALLS:
-        custom = os.path.join(src, f'{key}.jpg')
-        if os.path.isfile(custom):
-            import shutil
-            shutil.copyfile(custom, os.path.join(outdir, f'{key}.jpg'))
+        names = [f'{key}.jpg', f'{key}.png'] + [n + '.png' for n in CUSTOM_NAMES.get(key, [])]
+        custom = next((os.path.join(src, n) for n in names if os.path.isfile(os.path.join(src, n))), None)
+        if custom:
             ci = Image.open(custom).convert('RGB')
+            ci.save(os.path.join(outdir, f'{key}.jpg'), quality=95, subsampling=0, optimize=True, progressive=True)
             cw, ch = ci.size
             r = max(480 / cw, 270 / ch)
             ci = ci.resize((max(480, round(cw * r)), max(270, round(ch * r))), Image.LANCZOS)
