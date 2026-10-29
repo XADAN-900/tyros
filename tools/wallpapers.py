@@ -157,7 +157,20 @@ WALLS = [('tyros', 'TyrOS', w_tyros), ('akis', 'Akış', w_flow), ('kuzey', 'Kuz
 def build(logo, outdir):
     import os
     os.makedirs(outdir, exist_ok=True)
+    src = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'branding', 'wallpapers')
     for key, _name, fn in WALLS:
+        custom = os.path.join(src, f'{key}.jpg')
+        if os.path.isfile(custom):
+            import shutil
+            shutil.copyfile(custom, os.path.join(outdir, f'{key}.jpg'))
+            ci = Image.open(custom).convert('RGB')
+            cw, ch = ci.size
+            r = max(480 / cw, 270 / ch)
+            ci = ci.resize((max(480, round(cw * r)), max(270, round(ch * r))), Image.LANCZOS)
+            l, t = (ci.width - 480) // 2, (ci.height - 270) // 2
+            ci.crop((l, t, l + 480, t + 270)).save(os.path.join(outdir, f'{key}-k.jpg'), quality=88)
+            print('wallpaper (custom):', key)
+            continue
         img = finish(fn(logo))
         img.save(os.path.join(outdir, f'{key}.jpg'), quality=95, subsampling=0, optimize=True, progressive=True)
         img.resize((480, 270), Image.LANCZOS).save(os.path.join(outdir, f'{key}-k.jpg'), quality=88)
