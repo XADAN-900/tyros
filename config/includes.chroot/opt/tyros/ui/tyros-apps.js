@@ -9,7 +9,11 @@ const run = async (cmd, timeout = 60) => {
   if (r.code !== 0) throw new Error((r.stderr || r.stdout || 'İşlem başarısız').trim().split('\n').slice(-3).join('\n'));
   return r.stdout;
 };
-const tryRun = (cmd, timeout) => run(cmd, timeout).catch(() => '');
+// Komut hata koduyla bitse bile çıktısını döndür (ör. dpkg-query, listedeki
+// paketlerden biri kurulu değilse 1 döner ama kurulu olanları yine yazar)
+const tryRun = async (cmd, timeout = 60) => {
+  try { const r = await API.post('/api/exec', { cmd, timeout }); return r.stdout || ''; } catch { return ''; }
+};
 const row = (label, control, hint) => h('div', { class: 'st-row' },
   h('div', { class: 'st-label' }, h('div', {}, label), hint ? h('div', { class: 'muted st-hint' }, hint) : null), h('div', { class: 'st-ctl' }, control));
 const select = (options, value, onchange) => {
@@ -514,6 +518,8 @@ BUILTIN.store.launch = () => {
         tryRun(`rm -f ${log} ${rc}`);
         status.hidden = true;
         if (code.trim() === '0') {
+          if (action === 'install') installed.add(pkg);
+          if (action === 'remove') installed.delete(pkg);
           notify('Tamamlandı', title.replace('kuruluyor', 'kuruldu').replace('kaldırılıyor', 'kaldırıldı').replace('güncelleniyor', 'güncellendi'));
           Shell.loadApps(true);
         } else {
