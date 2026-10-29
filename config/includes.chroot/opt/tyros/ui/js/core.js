@@ -249,6 +249,29 @@ const Settings = {
     const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     document.documentElement.style.setProperty('--accent-ink', lum > .55 ? '#161208' : '#fff');
     const wp = $('#wallpaper');
-    if (wp) wp.innerHTML = wallpaperSVG(this.data.wallpaper, a);
+    if (wp) {
+      const id = this.data.wallpaper;
+      if (wp.dataset.wp === id && wp.firstElementChild) return;
+      wp.dataset.wp = id;
+      const gen = (wp._gen = (wp._gen || 0) + 1);
+      const tmp = document.createElement('div');
+      tmp.innerHTML = wallpaperSVG(id, a);
+      const el = tmp.firstElementChild;
+      const old = [...wp.children];
+      if (!old.length || !el || document.documentElement.classList.contains('ty-noanim')) {
+        wp.innerHTML = tmp.innerHTML; return;
+      }
+      const go = () => {
+        if (gen !== wp._gen) return;
+        el.style.opacity = '0';
+        el.style.transition = 'opacity .8s ease';
+        wp.appendChild(el);
+        el.getBoundingClientRect();
+        requestAnimationFrame(() => { el.style.opacity = '1'; });
+        setTimeout(() => { old.forEach(o => o.remove()); el.style.transition = ''; }, 900);
+      };
+      const m = /url\('([^']+)'\)/.exec(tmp.innerHTML);
+      if (m) { const im = new Image(); im.onload = im.onerror = go; im.src = m[1]; } else go();
+    }
   },
 };
