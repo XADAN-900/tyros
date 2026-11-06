@@ -114,6 +114,27 @@ BUILTIN.files.launch = async (startPath) => {
     const places = await API.get('/api/places');
     places.forEach(p => side.append(h('button', { 'data-path': p.path, onclick: () => go(p.path) }, p.name)));
   } catch (e) { fail(e); }
+  // Sürücüler (USB bellekler ve diğer diskler) — takılınca kendiliğinden görünür
+  if (window.TyDrives) {
+    const drvBox = h('div', { class: 'fm-drives' });
+    side.append(drvBox);
+    const fill = l => {
+      drvBox.replaceChildren();
+      if (!l.length) return;
+      drvBox.append(h('div', { class: 'fm-sidetitle' }, 'Sürücüler'));
+      for (const d of l) drvBox.append(h('div', { class: 'fm-drive' },
+        h('button', { 'data-path': d.mount || '', title: `${d.name} · ${fmtBytes(d.size)}`,
+          onclick: async () => { try { go(await TyDrives.mount(d)); } catch (e) { fail(e); } } },
+          `${d.name} (${fmtBytes(d.size)})`),
+        d.removable ? h('button', { class: 'fm-eject', title: 'Güvenle çıkar', html: svgIcon('eject'),
+          onclick: () => TyDrives.eject(d).catch(fail) }) : null));
+    };
+    fill(TyDrives.list);
+    TyDrives.scan().then(fill);
+    TyDrives.listeners.add(fill);
+    const _oc = win.onClose;
+    win.onClose = () => { TyDrives.listeners.delete(fill); return _oc ? _oc() : true; };
+  }
 
   pathInput.addEventListener('keydown', e => { if (e.key === 'Enter') go(pathInput.value); });
 

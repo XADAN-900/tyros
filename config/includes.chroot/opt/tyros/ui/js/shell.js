@@ -212,7 +212,7 @@ const Shell = {
     await this.loadApps();
     try {
       const s = await API.get('/api/sysinfo');
-      $('#smUser').textContent = s.user; $('#smHost').textContent = s.hostname;
+      $('#smUser').textContent = s.fullname || s.user; $('#smHost').textContent = s.hostname;
       $('#smAvatar').textContent = (s.user || 'T')[0].toUpperCase();
     } catch { /* sınırlı mod */ }
 
