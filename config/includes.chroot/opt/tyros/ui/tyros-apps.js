@@ -440,7 +440,7 @@ BUILTIN.store.launch = () => {
       h('button', { class: 'btn', title: 'Debian paket listesini indir', html: svgIcon('refresh') + 'Listeyi güncelle', onclick: () => job('update', '', 'Paket listesi güncelleniyor') })),
     main, status));
   WM.open({ app: BUILTIN.store, width: 960, height: 640, content: root, single: true });
-  let installed = new Set(), available = null, view = 'home';
+  let installed = new Set(), available = null, view = 'home', featShown = [];
 
   side.append(h('button', { 'data-k': 'home', html: svgIcon('home') + '<span>Keşfet</span>', onclick: () => show('home') }));
   for (const [key, label, icon] of STORE_CATS) side.append(h('button', { 'data-k': key, html: svgIcon(icon) + `<span>${esc(label)}</span>`, onclick: () => show(key) }));
@@ -482,15 +482,32 @@ BUILTIN.store.launch = () => {
     const notice = !lists ? h('div', { class: 'sto-notice' }, h('div', {}, h('b', {}, 'Paket listesi henüz indirilmedi.'), h('div', { class: 'muted' }, 'Uygulama kurabilmek için önce listeyi güncelle (internet gerekir).')),
       h('button', { class: 'btn primary', onclick: () => job('update', '', 'Paket listesi güncelleniyor') }, 'Şimdi güncelle')) : null;
     const usable = p => !lists || !available.size || available.has(p[0]) || installed.has(p[0]);
+    // Öne çıkanlar: her açılışta tüm kategorilerden karışık, henüz kurulmamış uygulamalar
+    const featGrid = h('div', { class: 'sto-grid' });
+    const featured = () => {
+      const seen = new Set(featShown);
+      const pools = STORE_CATS.map(c => c[3].filter(p => usable(p) && !installed.has(p[0])).sort(() => Math.random() - .5));
+      const pick = [];
+      // önce son gösterilmeyenlerden, her kategoriden sırayla birer tane
+      for (let round = 0; pick.length < 9 && round < 6; round++) {
+        for (const pool of pools.sort(() => Math.random() - .5)) {
+          const p = pool.find(x => !seen.has(x[0]) && !pick.includes(x)) || (round > 1 && pool.find(x => !pick.includes(x)));
+          if (p && pick.length < 9) pick.push(p);
+        }
+      }
+      featShown = pick.map(p => p[0]);
+      return pick;
+    };
     if (key === 'home') {
       main.replaceChildren(...[notice,
         h('div', { class: 'sto-hero' }, h('img', { src: LOGO_URL, alt: '' }), h('div', {}, h('h2', {}, 'Uygulama Mağazası'),
           h('div', { class: 'muted' }, 'Debian deposundaki on binlerce uygulamadan istediğini kur. Kategorilere göz at ya da yukarıdan ara.'))),
         h('div', { class: 'sto-cats' }, STORE_CATS.map(([k, label, icon, list]) => h('button', { class: 'sto-cat', onclick: () => show(k) },
           h('span', { class: 'ico', html: svgIcon(icon) }), h('b', {}, label), h('span', { class: 'muted' }, `${list.filter(usable).length} uygulama`)))),
-        h('h3', {}, 'Öne çıkanlar'),
-        h('div', { class: 'sto-grid' }, [['vlc', 'VLC', 'Video ve müzik oynatıcı'], ['gimp', 'GIMP', 'Fotoğraf düzenleme'], ['libreoffice-writer', 'LibreOffice Writer', 'Kelime işlemci'],
-          ['thunderbird', 'Thunderbird', 'E-posta'], ['obs-studio', 'OBS Studio', 'Ekran kaydı'], ['supertuxkart', 'SuperTuxKart', 'Araba yarışı']].filter(usable).map(p => card(...p)))].filter(Boolean));
+        h('div', { class: 'st-gtitle-row sto-feat-head' }, h('h3', {}, 'Öne çıkanlar'),
+          h('button', { class: 'btn', title: 'Başka uygulamalar göster', html: svgIcon('refresh') + 'Başkalarını göster', onclick: () => featGrid.replaceChildren(...featured().map(p => card(...p))) })),
+        featGrid].filter(Boolean));
+      featGrid.replaceChildren(...featured().map(p => card(...p)));
     } else if (key === 'installed') {
       const mine = STORE_CATS.flatMap(c => c[3]).filter(p => installed.has(p[0]));
       main.replaceChildren(h('h3', {}, 'Bu bilgisayarda yüklü'), mine.length ? h('div', { class: 'sto-grid' }, mine.map(p => card(...p)))

@@ -206,3 +206,5 @@ html, body, #boot { background: #0b1220; }
 .fm-drive > button:first-child { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fm-side .fm-eject { width: 28px; padding: 6px; display: grid; place-items: center; }
 .fm-eject svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.sto-feat-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sto-feat-head h3 { margin: 0; }

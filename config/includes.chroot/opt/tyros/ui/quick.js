@@ -114,8 +114,16 @@ window.TyDrives = Drives;
 
 // Takılan USB'leri yakala: yeni sürücü gelince bağla ve haber ver
 async function watchDrives() {
-  let known = null;
+  let known = null, sig = null, pending = 1;
   const tick = async () => {
+    // Ucuz imza kontrolü: bir şey takılıp çıkarılmadıkça ayrıntılı tarama yapma.
+    // Değişince birkaç tur daha tara (yeni takılan USB'nin dosya sistemi birkaç saniyede tanınır).
+    try {
+      const g = (await API.get('/api/blockgen')).sig;
+      if (g !== sig) { sig = g; pending = 3; }
+    } catch { pending = Math.max(pending, 1); }
+    if (pending <= 0) return;
+    pending--;
     const l = await Drives.scan();
     const keys = new Set(l.map(d => d.path));
     if (known) {
@@ -128,12 +136,14 @@ async function watchDrives() {
         const t = $('#toasts')?.lastElementChild;
         if (t) { t.style.cursor = 'pointer'; t.addEventListener('click', () => { t.remove(); Drives.open(d).catch(fail); }); }
       }
-      if (added.length || [...known].some(p => !keys.has(p))) Drives.listeners.forEach(fn => fn(l));
+      Drives.listeners.forEach(fn => fn(l));
     }
     known = keys;
   };
-  await tick();
-  setInterval(tick, 3000);
+  let busy = false;
+  const safeTick = async () => { if (busy) return; busy = true; try { await tick(); } catch { /* sonraki tur */ } busy = false; };
+  await safeTick();
+  setInterval(safeTick, 2000);
 }
 
 /* ---------------------------------------------------------------- hızlı panel */
