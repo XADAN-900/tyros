@@ -1,0 +1,12 @@
+// TyrOS: yönetici (sudo) grubundaki kullanıcılar USB/disk bağlayıp çıkarabilir,
+// ağ ve Bluetooth ayarlarını şifre sormadan değiştirebilir.
+polkit.addRule(function (action, subject) {
+  if (!subject.isInGroup("sudo") && !(subject.local && subject.active)) return polkit.Result.NOT_HANDLED;
+  if (action.id.indexOf("org.freedesktop.udisks2.") === 0 ||
+      action.id.indexOf("org.freedesktop.NetworkManager.") === 0 ||
+      action.id.indexOf("org.freedesktop.login1.power-off") === 0 ||
+      action.id.indexOf("org.freedesktop.login1.reboot") === 0) {
+    return polkit.Result.YES;
+  }
+  return polkit.Result.NOT_HANDLED;
+});
