@@ -593,12 +593,25 @@ def r_settings(q, body):
     return json.loads(read(SETTINGS_FILE, "{}") or "{}")
 
 
+def r_blockgen(q, body):
+    """Disk/USB değişikliği imzası — alt süreç başlatmadan, çok ucuz.
+    Arayüz bunu sık sorar; sadece imza değişince ayrıntılı tarama yapar."""
+    try:
+        devs = sorted(os.listdir("/sys/class/block"))
+    except OSError:
+        devs = []
+    mounts = "".join(l.split(" ", 2)[0] + l.split(" ", 2)[1] for l in read("/proc/mounts").splitlines()
+                     if l.startswith("/dev/"))
+    return {"sig": str(hash(("|".join(devs), mounts)))}
+
+
 def r_ping(q, body):
     return {"ok": True, "name": "TyrOS", "version": "1.0", "term": have("ttyd")}
 
 
 ROUTES = {
     ("GET", "/api/ping"): r_ping,
+    ("GET", "/api/blockgen"): r_blockgen,
     ("GET", "/api/sysinfo"): r_sysinfo,
     ("GET", "/api/apps"): r_apps,
     ("POST", "/api/launch"): r_launch,
