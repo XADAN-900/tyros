@@ -29,7 +29,7 @@
       <div class="sm-user">
         <div class="sm-avatar" id="smAvatar">T</div>
         <div>
-          <div class="sm-username" id="smUser">tyr</div>
+          <div class="sm-username" id="smUser">TyrOS</div>
           <div class="sm-host" id="smHost">tyros</div>
         </div>
       </div>
@@ -48,16 +48,8 @@
 
   <!-- Hızlı ayarlar paneli -->
   <section id="quickPanel" hidden aria-label="Hızlı ayarlar">
-    <div class="qp-row">
-      <span class="qp-label">Ses</span>
-      <input type="range" id="qpVolume" min="0" max="100" value="50">
-      <button id="qpMute" class="qp-mini" title="Sesi kapat/aç"></button>
-    </div>
-    <div class="qp-net" id="qpNet">Ağ durumu alınıyor…</div>
-    <div class="qp-actions">
-      <button data-open="settings">Tüm ayarlar</button>
-      <button data-power="shutdown" class="danger">Kapat</button>
-    </div>
+    <input type="range" id="qpVolume" min="0" max="100" value="50" hidden>
+    <button id="qpMute" class="qp-mini" hidden></button>
   </section>
 
   <!-- Görev çubuğu -->
@@ -84,6 +76,7 @@
   <script src="js/apps.js"></script>
   <script src="brand.js"></script>
   <script src="tyros-apps.js"></script>
+  <script src="quick.js"></script>
   <script src="js/shell.js"></script>
 </body>
 </html>

@@ -157,3 +157,52 @@ html, body, #boot { background: #0b1220; }
 /* Duvar kağıdı: yüksek kaliteli ölçekleme */
 .wp-img { position: absolute; inset: 0; background-position: center; background-size: cover; background-repeat: no-repeat; }
 .wall .wp-img { border-radius: inherit; }
+
+/* ---------------------------------------------------------- hızlı ayarlar (Windows tarzı) */
+#quickPanel.qp2 { width: 396px; padding: 14px; gap: 12px; }
+.qp-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.qp-tile { display: flex; min-height: 62px; border-radius: 8px; background: var(--stone-2); border: 1px solid var(--iron); overflow: hidden; }
+.qp-tile.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.qp-tile.dis { opacity: .5; }
+.qp-tile button { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.qp-tmain { flex: 1; min-width: 0; display: grid; align-content: center; justify-items: start; gap: 4px; padding: 8px 6px 8px 10px; text-align: left; }
+.qp-tmain:hover:not(:disabled) { background: rgba(255,255,255,.07); }
+.qp-tmain:disabled { cursor: default; }
+.qp-tmore { width: 22px; display: grid; place-items: center; border-left: 1px solid rgba(255,255,255,.08) !important; }
+.qp-tmore:hover { background: rgba(255,255,255,.1); }
+.qp-tmore svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; }
+.qp-ti { display: grid; place-items: center; }
+.qp-ti svg, .qp-ico svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.qp-tt { display: grid; min-width: 0; max-width: 100%; }
+.qp-tt b { font-size: 12.5px; font-weight: 600; line-height: 1.15; overflow-wrap: anywhere; }
+.qp-tt small { font-size: 11px; opacity: .78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qp2 .qp-row { gap: 10px; }
+.qp-ico { width: 32px; display: grid; place-items: center; color: var(--mist); }
+.qp2 .qp-row input[type=range] { flex: 1; accent-color: var(--accent); }
+.qp-drives { display: grid; gap: 6px; }
+.qp-drives:empty { display: none; }
+.qp-dtitle { font-size: 12px; color: var(--mist); }
+.qp-drive { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 7px; background: var(--stone-2); }
+.qp-dname { flex: 1; min-width: 0; border: 0; background: none; color: inherit; text-align: left; display: grid; cursor: pointer; padding: 0; }
+.qp-dname b { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qp-dname small { font-size: 11px; color: var(--mist); }
+.qp-foot { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--iron); margin: 0 -14px -14px; padding: 9px 14px; background: var(--stone-2); border-radius: 0 0 10px 10px; position: relative; }
+.qp-foot-l { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--mist); min-width: 0; }
+.qp-user { color: var(--frost); font-weight: 600; }
+.qp-batt { display: inline-flex; align-items: center; gap: 4px; }
+.qp-batt svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.qp-foot-r { display: flex; gap: 6px; }
+.qp-round { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--iron); background: var(--stone); color: var(--frost); display: grid; place-items: center; cursor: pointer; }
+.qp-round:hover { background: var(--stone-3); }
+.qp-round svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.qp-powermenu { position: absolute; right: 10px; bottom: 48px; min-width: 180px; padding: 5px; background: var(--stone); border: 1px solid var(--iron); border-radius: 8px; box-shadow: 0 16px 40px rgba(0,0,0,.55); display: grid; z-index: 2; }
+.qp-powermenu[hidden] { display: none; }
+.qp-powermenu button { border: 0; background: none; color: var(--frost); text-align: left; padding: 8px 12px; border-radius: 5px; font-size: 13px; cursor: pointer; }
+.qp-powermenu button:hover { background: var(--stone-3); }
+.qp-powermenu button.danger:hover { background: var(--danger); color: #fff; }
+/* Dosyalar: sürücüler */
+.fm-sidetitle { font-size: 11.5px; color: var(--mist); padding: 12px 10px 4px; text-transform: uppercase; letter-spacing: .04em; }
+.fm-drive { display: flex; align-items: center; }
+.fm-drive > button:first-child { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fm-side .fm-eject { width: 28px; padding: 6px; display: grid; place-items: center; }
+.fm-eject svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; }

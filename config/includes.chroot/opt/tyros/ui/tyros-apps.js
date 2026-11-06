@@ -58,7 +58,7 @@ notify = function (title, text = '', isErr = false, ms) {
 BUILTIN.settings.launch = (section = 'look') => {
   const SECTIONS = [
     ['look', 'Görünüm', 'image', look], ['display', 'Ekran', 'monitor', display], ['sound', 'Ses', 'vol', sound],
-    ['net', 'Ağ ve internet', 'wifi', net], ['keyboard', 'Klavye ve dil', 'editor', keyboard], ['time', 'Tarih ve saat', 'info', time],
+    ['net', 'Ağ ve internet', 'wifi', net], ['bluetooth', 'Bluetooth ve aygıtlar', 'bt', bluetooth], ['keyboard', 'Klavye ve dil', 'editor', keyboard], ['time', 'Tarih ve saat', 'info', time],
     ['power', 'Güç ve ekran koruyucu', 'power', power], ['storage', 'Depolama', 'package', storage],
     ['apps', 'Varsayılan uygulamalar', 'store', defaults], ['notify', 'Bildirimler', 'settings', notifications], ['system', 'Sistem', 'home', system],
   ];
@@ -176,6 +176,85 @@ BUILTIN.settings.launch = (section = 'look') => {
       body.append(group('Bağlantı bilgisi', row('IP adresi', h('span', {}, ip || 'Bağlı değil')),
         row('Gelişmiş ağ ayarları', h('button', { class: 'btn', onclick: () => tryRun('nohup nm-connection-editor >/dev/null 2>&1 &') }, 'Aç'), 'VPN, sabit IP, DNS gibi ayarlar')));
     } catch (e) { box.innerHTML = ''; box.append(h('div', { class: 'muted st-pad' }, e.message)); }
+  }
+
+  /* ---------------------------------------------------------------- Bluetooth ve aygıtlar */
+  async function bluetooth() {
+    const bt = (cmd, t = 10) => tryRun(`timeout ${t} bluetoothctl ${cmd} 2>&1`, t + 5);
+    const btBox = h('div', { class: 'st-card' }, h('div', { class: 'muted st-pad' }, 'Bluetooth denetleniyor…'));
+    const devBox = h('div', { class: 'st-card' });
+    const drvBox = h('div', { class: 'st-card' }, h('div', { class: 'muted st-pad' }, 'Sürücüler okunuyor…'));
+    const scanBtn = h('button', { class: 'btn', html: svgIcon('refresh') + 'Aygıt ara' });
+    body.append(group('Bluetooth', btBox),
+      h('div', { class: 'st-group' }, h('div', { class: 'st-gtitle st-gtitle-row' }, 'Bluetooth aygıtları', scanBtn), devBox),
+      h('div', { class: 'st-group' }, h('div', { class: 'st-gtitle st-gtitle-row' }, 'Sürücüler (USB ve diskler)',
+        h('button', { class: 'btn', html: svgIcon('refresh') + 'Yenile', onclick: () => drives() })), drvBox));
+
+    const parse = txt => txt.split('\n').map(l => l.match(/^Device ([0-9A-F:]{17}) (.+)$/i)).filter(Boolean).map(m => ({ mac: m[1], name: m[2].trim() }));
+    async function devices() {
+      const [all, paired, conn] = await Promise.all([bt('devices', 5), bt('devices Paired', 5), bt('devices Connected', 5)]);
+      const P = new Set(parse(paired).map(d => d.mac)), C = new Set(parse(conn).map(d => d.mac));
+      const list = parse(all).filter(d => d.name.replace(/-/g, ':') !== d.mac)
+        .sort((a, b) => (C.has(b.mac) - C.has(a.mac)) || (P.has(b.mac) - P.has(a.mac)) || a.name.localeCompare(b.name, 'tr'));
+      devBox.replaceChildren();
+      if (!list.length) { devBox.append(h('div', { class: 'muted st-pad' }, 'Aygıt yok. Kulaklık, fare vb. aygıtını eşleştirme moduna alıp "Aygıt ara"ya bas.')); return; }
+      for (const d of list) {
+        const act = async (label, cmd, t) => { notify(label, d.name); const r = await bt(cmd, t); if (/fail|error|not available/i.test(r)) fail(new Error(r.trim().split('\n').pop())); devices(); };
+        const btns = C.has(d.mac)
+          ? [h('button', { class: 'btn', onclick: () => act('Bağlantı kesiliyor', `disconnect ${d.mac}`, 10) }, 'Bağlantıyı kes')]
+          : P.has(d.mac)
+            ? [h('button', { class: 'btn primary', onclick: () => act('Bağlanılıyor', `connect ${d.mac}`, 20) }, 'Bağlan')]
+            : [h('button', { class: 'btn primary', onclick: async () => {
+                notify('Eşleştiriliyor', d.name);
+                const r = await tryRun(`(timeout 25 bluetoothctl scan on >/dev/null 2>&1 &); sleep 2; timeout 30 bluetoothctl pair ${d.mac} 2>&1; timeout 5 bluetoothctl trust ${d.mac} >/dev/null 2>&1; timeout 20 bluetoothctl connect ${d.mac} 2>&1`, 70);
+                if (/Pairing successful|Connection successful|AlreadyExists/i.test(r)) notify('Bağlandı', d.name);
+                else fail(new Error('Eşleştirilemedi. Aygıtın eşleştirme modunda olduğundan emin ol.'));
+                devices();
+              } }, 'Eşleştir')];
+        if (P.has(d.mac)) btns.push(h('button', { class: 'btn', onclick: () => act('Aygıt kaldırılıyor', `remove ${d.mac}`, 10) }, 'Kaldır'));
+        devBox.append(h('div', { class: 'st-row' },
+          h('div', { class: 'st-label st-net' }, h('span', { class: 'ico', html: svgIcon('bt') }),
+            h('div', {}, h('div', {}, d.name), h('div', { class: 'muted st-hint' }, C.has(d.mac) ? 'Bağlı' : P.has(d.mac) ? 'Eşleştirildi' : 'Bulundu'))),
+          h('div', { class: 'st-ctl st-inline' }, ...btns)));
+      }
+    }
+    scanBtn.addEventListener('click', async () => {
+      scanBtn.disabled = true; scanBtn.lastChild.textContent = 'Aranıyor…';
+      devBox.replaceChildren(h('div', { class: 'muted st-pad' }, 'Yakındaki aygıtlar aranıyor (10 sn)…'));
+      await tryRun('timeout 12 bluetoothctl --timeout 10 scan on >/dev/null 2>&1', 20);
+      scanBtn.disabled = false; scanBtn.lastChild.textContent = 'Aygıt ara';
+      devices();
+    });
+
+    async function drives() {
+      const l = await TyDrives.scan();
+      drvBox.replaceChildren();
+      if (!l.length) { drvBox.append(h('div', { class: 'muted st-pad' }, 'Takılı USB bellek ya da ek disk yok.')); return; }
+      for (const d of l) {
+        drvBox.append(h('div', { class: 'st-row' },
+          h('div', { class: 'st-label st-net' }, h('span', { class: 'ico', html: svgIcon(d.removable ? 'usb' : 'disk') }),
+            h('div', {}, h('div', {}, d.name), h('div', { class: 'muted st-hint' }, `${fmtBytes(d.size)} · ${(d.fs || '').toUpperCase()} · ${d.removable ? 'Çıkarılabilir' : 'Dahili'}${d.mount ? ' · ' + d.mount : ''}`))),
+          h('div', { class: 'st-ctl st-inline' },
+            h('button', { class: 'btn primary', onclick: () => TyDrives.open(d).then(drives).catch(fail) }, 'Aç'),
+            d.mount || d.removable ? h('button', { class: 'btn', onclick: () => TyDrives.eject(d).then(drives).catch(fail) }, d.removable ? 'Çıkar' : 'Bağlantıyı kes') : null)));
+      }
+    }
+    drives();
+
+    const info = await bt('show', 3);
+    btBox.replaceChildren();
+    if (!/Controller/.test(info)) {
+      btBox.append(h('div', { class: 'muted st-pad' }, 'Bu bilgisayarda Bluetooth donanımı bulunamadı. (Sanal makinelerde genelde olmaz; USB Bluetooth adaptörü takarsan burada görünür.)'));
+      devBox.replaceChildren(h('div', { class: 'muted st-pad' }, '—')); scanBtn.disabled = true;
+      return;
+    }
+    const powered = /Powered: yes/.test(info);
+    btBox.append(row('Bluetooth', toggle(powered, async v => {
+      if (v) await tryRun('rfkill unblock bluetooth 2>/dev/null; sleep 1');
+      await bt(`power ${v ? 'on' : 'off'}`, 5); show('bluetooth');
+    }), 'Kablosuz kulaklık, hoparlör, fare ve klavye bağlamak için'),
+    row('Görünür ol', toggle(/Discoverable: yes/.test(info), v => bt(`discoverable ${v ? 'on' : 'off'}`, 5)), 'Telefonun bu bilgisayarı bulabilsin'));
+    if (powered) devices(); else { devBox.replaceChildren(h('div', { class: 'muted st-pad' }, 'Bluetooth kapalı.')); scanBtn.disabled = true; }
   }
 
   /* ---------------------------------------------------------------- Klavye */
