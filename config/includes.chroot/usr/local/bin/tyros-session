@@ -64,9 +64,14 @@ read -r W H < <(xdpyinfo 2>/dev/null | awk '/dimensions:/{split($2,a,"x"); print
 
 # Arayüz penceresi her zaman tüm ekranı kaplasın: ekran çözünürlüğü değişirse
 # (ör. sanal makine penceresi büyütülünce) ya da pencere eksik boyutta açılırsa düzelt.
-( while sleep 2 && xset q >/dev/null 2>&1; do
+( N=0; LAST=""
+  while sleep 2 && xset q >/dev/null 2>&1; do
     read -r SW SH < <(xdotool getdisplaygeometry 2>/dev/null)
     [ -n "$SH" ] || continue
+    # Ekran boyutu değişmediyse pencereyi 10 sn'de bir denetle (işlemciyi boşuna yormasın)
+    N=$((N + 1))
+    if [ "${SW}x${SH}" = "$LAST" ] && [ $((N % 5)) -ne 0 ]; then continue; fi
+    LAST="${SW}x${SH}"
     best=""; best_area=0
     for wid in $(xdotool search --onlyvisible --class TyrOSShell 2>/dev/null); do
       eval "$(xdotool getwindowgeometry --shell "$wid" 2>/dev/null)" || continue
@@ -83,6 +88,13 @@ read -r W H < <(xdpyinfo 2>/dev/null | awk '/dimensions:/{split($2,a,"x"); print
 
 BROWSER=$(command -v chromium || command -v chromium-browser)
 PREF="$HOME/.config/tyros/shell/Default/Preferences"
+# Belleğe göre ayar: az RAM'li bilgisayarlarda Chromium tasarruf modunda çalışsın
+MEM_KB=$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null)
+if [ "${MEM_KB:-0}" -gt 0 ] && [ "${MEM_KB:-0}" -lt 3000000 ]; then
+  LOWMEM=(--enable-low-end-device-mode --renderer-process-limit=1 --disk-cache-size=16777216)
+else
+  LOWMEM=(--disk-cache-size=67108864)
+fi
 # Google hizmet anahtarı uyarısını gösterme
 export GOOGLE_API_KEY=no GOOGLE_DEFAULT_CLIENT_ID=no GOOGLE_DEFAULT_CLIENT_SECRET=no
 
@@ -101,8 +113,10 @@ while xset q >/dev/null 2>&1; do
     --password-store=basic \
     --overscroll-history-navigation=0 --disable-pinch \
     --hide-crash-restore-bubble --disable-session-crashed-bubble --disable-infobars \
-    --disable-features=Translate,TranslateUI,DownloadBubble,DownloadBubbleV2,MediaRouter,GlobalMediaControls,ChromeWhatsNewUI,PrivacySandboxSettings4 \
+    --disable-features=Translate,TranslateUI,DownloadBubble,DownloadBubbleV2,MediaRouter,GlobalMediaControls,ChromeWhatsNewUI,PrivacySandboxSettings4,OptimizationGuideModelDownloading,OptimizationHintsFetching,OptimizationTargetPrediction,AutofillServerCommunication,InterestFeedContentSuggestions \
     --disable-component-update --disable-background-networking --disable-sync --no-pings \
+    --disable-breakpad --disable-domain-reliability --disable-client-side-phishing-detection \
+    "${LOWMEM[@]}" \
     >>"$LOG/shell.log" 2>&1
   sleep 1
 done
