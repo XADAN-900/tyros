@@ -140,6 +140,7 @@ def r_sysinfo(q, body):
     return {
         "hostname": socket.gethostname(),
         "user": os.environ.get("USER") or pwd.getpwuid(os.getuid()).pw_name,
+        "fullname": (pwd.getpwuid(os.getuid()).pw_gecos or "").split(",")[0].strip(),
         "os": os_name(),
         "kernel": os.uname().release,
         "arch": os.uname().machine,
