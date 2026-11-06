@@ -8,16 +8,6 @@ U=$(awk -F: '$3==1000{print $1; exit}' /etc/passwd)
 for g in sudo bluetooth plugdev video netdev; do
   [ -n "$U" ] && getent group "$g" >/dev/null && usermod -aG "$g" "$U"
 done
-# Canlı modda hiçbir yerde şifre sorulmasın: şifreyi tamamen kaldır
-# (konsol girişi, giriş ekranı, sudo ve yetki pencereleri boş şifreyle geçer)
-[ -n "$U" ] && passwd -d "$U" >/dev/null 2>&1
-# Açılışta her zaman otomatik giriş
-if [ -n "$U" ]; then
-  mkdir -p /etc/lightdm/lightdm.conf.d
-  printf '[Seat:*]\nautologin-user=%s\nautologin-user-timeout=0\nautologin-session=openbox\n' "$U" > /etc/lightdm/lightdm.conf.d/60-tyros-live.conf
-  printf '%s ALL=(ALL) NOPASSWD: ALL\n' "$U" > /etc/sudoers.d/90-tyros-live
-  chmod 0440 /etc/sudoers.d/90-tyros-live
-fi
 # Giriş ekranı açıldığında canlı kullanıcı seçili gelsin
 mkdir -p /var/lib/lightdm/.cache/lightdm-gtk-greeter 2>/dev/null
 printf '[greeter]\nlast-user=%s\nlast-session=openbox\n' "$U" > /var/lib/lightdm/.cache/lightdm-gtk-greeter/state 2>/dev/null
