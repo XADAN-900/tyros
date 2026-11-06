@@ -103,6 +103,38 @@ mkdir -p /etc/systemd/journald.conf.d /etc/sysctl.d
 printf '[Journal]\nSystemMaxUse=50M\nRuntimeMaxUse=30M\n' > /etc/systemd/journald.conf.d/tyros.conf
 printf 'vm.swappiness=100\nvm.vfs_cache_pressure=50\n' > /etc/sysctl.d/90-tyros.conf
 
+# --- Donanıma göre servisler: donanım yoksa servis hiç çalışmaz, takılınca kendiliğinden başlar ---
+# Modem servisi: yalnızca 3G/4G modem (ya da USB seri modem) varsa
+if [ -f /usr/lib/systemd/system/ModemManager.service ] || [ -f /lib/systemd/system/ModemManager.service ]; then
+  mkdir -p /etc/systemd/system/ModemManager.service.d
+  cat > /etc/systemd/system/ModemManager.service.d/tyros-hw.conf <<'UNIT'
+[Unit]
+ConditionPathExistsGlob=|/dev/cdc-wdm*
+ConditionPathExistsGlob=|/dev/wwan*
+ConditionPathExistsGlob=|/dev/ttyUSB*
+ConditionPathExistsGlob=|/dev/ttyACM*
+UNIT
+  cat > /etc/udev/rules.d/90-tyros-modem.rules <<'UDEV'
+# Modem sonradan takılırsa modem servisini başlat
+ACTION=="add", SUBSYSTEM=="tty", KERNEL=="ttyUSB*|ttyACM*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="ModemManager.service"
+ACTION=="add", SUBSYSTEM=="usbmisc", KERNEL=="cdc-wdm*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="ModemManager.service"
+ACTION=="add", SUBSYSTEM=="wwan", TAG+="systemd", ENV{SYSTEMD_WANTS}+="ModemManager.service"
+UDEV
+fi
+# Bluetooth: yalnızca Bluetooth kartı varsa (USB Bluetooth takılınca sistem kendisi başlatır)
+if [ -f /usr/lib/systemd/system/bluetooth.service ] || [ -f /lib/systemd/system/bluetooth.service ]; then
+  mkdir -p /etc/systemd/system/bluetooth.service.d
+  printf '[Unit]\nConditionPathExistsGlob=/sys/class/bluetooth/hci*\n' > /etc/systemd/system/bluetooth.service.d/tyros-hw.conf
+fi
+# Bellek neredeyse tamamen dolarsa (az RAM'li bilgisayarlar) sistem donmasın:
+# en çok bellek kullanan uygulama kapatılır, TyrOS arayüzü ve sistem parçaları korunur
+if [ -f /etc/default/earlyoom ]; then
+  cat > /etc/default/earlyoom <<'EOOM'
+EARLYOOM_ARGS="-m 4 -s 8 -r 0 --avoid ^(Xorg|X|lightdm|openbox|systemd|systemd-.*|dbus-daemon|apache2|python3|ttyd|NetworkManager|pipewire|wireplumber)$ --prefer ^(soffice.bin|firefox-esr|gimp.*|vlc|thunderbird)$"
+EOOM
+  systemctl enable earlyoom 2>/dev/null || true
+fi
+
 # --- Açılış animasyonu (Plymouth, TyrOS logosu) ---
 plymouth-set-default-theme tyros 2>/dev/null || true
 update-initramfs -u -k all 2>/dev/null || true
