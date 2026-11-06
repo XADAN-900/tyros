@@ -4,6 +4,10 @@
 groupadd -f nopasswdlogin
 U=$(awk -F: '$3==1000{print $1; exit}' /etc/passwd)
 [ -n "$U" ] && usermod -aG nopasswdlogin "$U"
+# USB/disk bağlama, Bluetooth ve parlaklık için gerekli gruplar
+for g in sudo bluetooth plugdev video netdev; do
+  [ -n "$U" ] && getent group "$g" >/dev/null && usermod -aG "$g" "$U"
+done
 # Giriş ekranı açıldığında canlı kullanıcı seçili gelsin
 mkdir -p /var/lib/lightdm/.cache/lightdm-gtk-greeter 2>/dev/null
 printf '[greeter]\nlast-user=%s\nlast-session=openbox\n' "$U" > /var/lib/lightdm/.cache/lightdm-gtk-greeter/state 2>/dev/null
