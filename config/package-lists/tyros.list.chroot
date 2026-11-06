@@ -96,6 +96,7 @@ calamares-settings-debian
 
 # --- Kararlılık: sıkıştırılmış takas (az RAM'li bilgisayarlar için) ---
 zram-tools
+earlyoom
 
 # --- Komut satırı araçları ---
 htop
