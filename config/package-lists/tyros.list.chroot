@@ -46,6 +46,15 @@ network-manager-gnome
 pipewire-audio
 wireplumber
 
+# --- Bluetooth, USB/disk bağlama, parlaklık ---
+bluez
+rfkill
+udisks2
+exfatprogs
+ntfs-3g
+dosfstools
+brightnessctl
+
 # --- Yazı tipleri ve simgeler ---
 fonts-noto-core
 fonts-noto-mono
