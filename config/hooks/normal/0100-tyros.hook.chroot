@@ -12,14 +12,14 @@ systemctl enable apache2 NetworkManager
 
 chmod 755 /usr/local/bin/tyros-session /usr/local/bin/tyros-logout /usr/local/bin/tyros-close /usr/local/bin/tyros-install /opt/tyros/api/tyros-api.py
 chmod -R a+rX /opt/tyros
-chmod 755 /usr/local/sbin/tyros-pkg
+chmod 755 /usr/local/sbin/tyros-pkg /usr/local/sbin/tyros-mount /usr/local/bin/tyros-key
 chmod 755 /usr/lib/live/config/2000-tyros-nopasswd
 # Giriş ekranında "nopasswdlogin" grubundakiler şifresiz girebilsin (yalnızca canlı kullanıcı bu grupta)
 if [ -f /etc/pam.d/lightdm ] && ! grep -q nopasswdlogin /etc/pam.d/lightdm; then
   sed -i '/pam_nologin.so/a auth    sufficient      pam_succeed_if.so user ingroup nopasswdlogin' /etc/pam.d/lightdm
 fi
-chmod 0440 /etc/sudoers.d/tyros-pkg
-chown root:root /etc/sudoers.d/tyros-pkg
+chmod 0440 /etc/sudoers.d/tyros-pkg /etc/sudoers.d/tyros-mount
+chown root:root /etc/sudoers.d/tyros-pkg /etc/sudoers.d/tyros-mount
 
 # --- Openbox: arayüz penceresi her zaman altta, çerçevesiz; tek masaüstü ---
 python3 - <<'PY'
@@ -42,6 +42,13 @@ s = re.sub(r"(<desktops>.*?<number>)\d+(</number>)", r"\g<1>1\2", s, count=1, fl
 s = re.sub(r'(<keybind key="A-F4">\s*)<action name="Close"\s*/>',
            r'\1<action name="Execute"><command>/usr/local/bin/tyros-close</command></action>', s, count=1)
 s = re.sub(r"(<theme>\s*<name>)[^<]*(</name>)", r"\1Clearlooks\2", s, count=1)
+# Klavyedeki ses / parlaklık tuşları ve ekran görüntüsü (Print Screen)
+keys = [("XF86AudioRaiseVolume", "vol-up"), ("XF86AudioLowerVolume", "vol-down"), ("XF86AudioMute", "mute"),
+        ("XF86MonBrightnessUp", "bright-up"), ("XF86MonBrightnessDown", "bright-down"),
+        ("Print", "shot"), ("A-Print", "shot-window"), ("S-Print", "shot-area")]
+binds = "".join(f'\n  <keybind key="{k}"><action name="Execute"><command>/usr/local/bin/tyros-key {a}</command></action></keybind>'
+                for k, a in keys if f'key="{k}"' not in s)
+s = s.replace("</keyboard>", binds + "\n</keyboard>", 1)
 open(p, "w", encoding="utf-8").write(s)
 PY
 
