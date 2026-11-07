@@ -97,6 +97,8 @@ calamares-settings-debian
 # --- Kararlılık: sıkıştırılmış takas (az RAM'li bilgisayarlar için) ---
 zram-tools
 earlyoom
+# Ekran görüntüsü (Print Screen tuşu)
+scrot
 
 # --- Komut satırı araçları ---
 htop
