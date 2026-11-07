@@ -504,8 +504,7 @@ BUILTIN.store.launch = () => {
           h('div', { class: 'muted' }, 'Debian deposundaki on binlerce uygulamadan istediğini kur. Kategorilere göz at ya da yukarıdan ara.'))),
         h('div', { class: 'sto-cats' }, STORE_CATS.map(([k, label, icon, list]) => h('button', { class: 'sto-cat', onclick: () => show(k) },
           h('span', { class: 'ico', html: svgIcon(icon) }), h('b', {}, label), h('span', { class: 'muted' }, `${list.filter(usable).length} uygulama`)))),
-        h('div', { class: 'st-gtitle-row sto-feat-head' }, h('h3', {}, 'Öne çıkanlar'),
-          h('button', { class: 'btn', title: 'Başka uygulamalar göster', html: svgIcon('refresh') + 'Başkalarını göster', onclick: () => featGrid.replaceChildren(...featured().map(p => card(...p))) })),
+        h('h3', {}, 'Öne çıkanlar'),
         featGrid].filter(Boolean));
       featGrid.replaceChildren(...featured().map(p => card(...p)));
     } else if (key === 'installed') {
