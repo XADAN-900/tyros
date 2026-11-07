@@ -47,10 +47,49 @@ const _load = Settings.load.bind(Settings);
 Settings.load = async function () { await _load(); Prefs.apply(); Prefs.applySystem(); };
 const _apply = Settings.apply.bind(Settings);
 Settings.apply = function () { _apply(); Prefs.apply(); };
+/* Teknik hata yazılarını herkesin anlayacağı Türkçe açıklamalara çevir */
+const FRIENDLY_ERRORS = [
+  [/Temporary failure resolving|Could not resolve|Failed to fetch|Network is unreachable|Unable to connect|Connection timed out|No route to host|Çözülemedi|getirilemedi|ağa ulaşılamıyor|Bağlanılamadı|bağlanılamıyor/i,
+    'İnternet bağlantısı yok. Bir ağa bağlanıp tekrar dene.'],
+  [/Unable to locate package|has no installation candidate|bulunamadı.*paket|paket.*bulunamadı/i,
+    'Bu uygulama paket listesinde bulunamadı. Önce Uygulama Mağazası\'nda "Listeyi güncelle"ye bas.'],
+  [/Could not get lock|lock-frontend|is another process using it|kilit/i,
+    'Şu anda başka bir kurulum sürüyor. O bitince tekrar dene.'],
+  [/dpkg was interrupted|dpkg kesintiye/i,
+    'Önceki bir kurulum yarım kalmış. Bilgisayarı yeniden başlatıp tekrar dene.'],
+  [/No space left on device|not enough free space|yeterli boş alan|yer kalmadı/i,
+    'Diskte yeterli boş yer yok. Gereksiz dosyaları silip tekrar dene.'],
+  [/target is busy|device is busy|meşgul/i,
+    'Sürücü şu anda kullanımda. Açık dosyaları kapatıp tekrar dene.'],
+  [/wrong fs type|unknown filesystem|bad superblock/i,
+    'Bu sürücünün biçimi tanınmadı ya da sürücü bozuk olabilir.'],
+  [/Secrets were required|invalid.*key|802-1x|password.*(wrong|incorrect)/i,
+    'Wi-Fi şifresi yanlış. Tekrar dene.'],
+  [/No network with SSID/i,
+    'Bu kablosuz ağ artık görünmüyor. Ağı yeniden tara.'],
+  [/Not authorized|not permitted|Permission denied|izin yok|yetki/i,
+    'Bu işlem için izin verilmedi.'],
+  [/No default controller|org\.bluez/i,
+    'Bluetooth donanımı bulunamadı ya da kapalı.'],
+  [/Komut \d+ saniyede bitmedi|timed out|zaman aşımı/i,
+    'İşlem çok uzun sürdü ve durduruldu. Tekrar dene.'],
+  [/Failed to fetch|NetworkError|Load failed/,
+    'Sistem köprüsüne ulaşılamadı. Birkaç saniye sonra tekrar dene.'],
+];
+function friendlyError(text) {
+  const t = String(text || '').trim();
+  if (!t) return 'Bilinmeyen bir sorun oluştu.';
+  for (const [re, msg] of FRIENDLY_ERRORS) if (re.test(t)) return msg;
+  // Bilinmeyen hata: teknik ön ekleri at, kısa tut
+  const line = t.split('\n').map(l => l.replace(/^(E|W|N|Error|Hata):\s*/i, '').trim()).filter(Boolean).pop() || t;
+  return line.length > 160 ? line.slice(0, 157) + '…' : line;
+}
+window.friendlyError = friendlyError;
 const _notify = notify;
 // eslint-disable-next-line no-global-assign
 notify = function (title, text = '', isErr = false, ms) {
   if (!isErr && Settings.data.quietNotify) return;
+  if (isErr) text = friendlyError(text);
   return _notify(title, text, isErr, ms);
 };
 
@@ -291,15 +330,16 @@ BUILTIN.settings.launch = (section = 'look') => {
   async function storage() {
     const out = await tryRun("df -B1 --output=source,target,size,used,fstype -x tmpfs -x devtmpfs -x squashfs -x overlay -x efivarfs 2>/dev/null | tail -n +2");
     const disks = out.trim().split('\n').filter(Boolean).map(l => l.trim().split(/\s+/)).map(([src, target, size, used, fs]) => ({ src, target, size: +size, used: +used, fs }))
-      .filter(d => !/^\/(run\/)?media\//.test(d.target));   // takılı USB'ler aşağıda ayrıca listelenir
+      .filter(d => !/^\/(run\/)?media\//.test(d.target))    // takılı USB'ler aşağıda ayrıca listelenir
+      .filter(d => !/^\/(boot|run\/live|lib\/live)/.test(d.target));   // açılış ve canlı USB bölümleri kullanıcıyı ilgilendirmez
     if (!disks.length) { body.append(group(null, h('div', { class: 'muted st-pad' }, 'Bu oturumda kalıcı disk yok (USB/ISO\'dan canlı çalışıyor).'))); }
     for (const d of disks) {
       const p = d.size ? d.used / d.size * 100 : 0;
-      body.append(group(d.target === '/' ? 'Sistem diski' : d.target,
+      body.append(group(d.target === '/' ? 'Sistem diski' : d.target === '/home' ? 'Kişisel dosyalar diski' : `Disk (${d.target.split('/').pop() || d.target})`,
         h('div', { class: 'st-pad' },
           h('div', { class: 'st-inline', style: { justifyContent: 'space-between' } }, h('b', {}, `${fmtBytes(d.used)} kullanılıyor`), h('span', { class: 'muted' }, `${fmtBytes(d.size - d.used)} boş · toplam ${fmtBytes(d.size)}`)),
           h('div', { class: 'bar st-bar' }, h('i', { style: { width: p + '%', background: p > 90 ? 'var(--danger)' : 'var(--accent)' } })),
-          h('div', { class: 'muted st-hint' }, `${d.src} · ${d.fs}`))));
+          h('div', { class: 'muted st-hint', title: `${d.src} · ${d.fs}` }, p > 90 ? 'Disk neredeyse dolu — gereksiz dosyaları silmen önerilir' : 'Yeterli boş yer var'))));
     }
     const drvBox = h('div', { class: 'st-card' }, h('div', { class: 'muted st-pad' }, 'Sürücüler okunuyor…'));
     body.append(h('div', { class: 'st-group' }, h('div', { class: 'st-gtitle st-gtitle-row' }, 'Takılı sürücüler (USB bellek ve diğer diskler)',
@@ -311,7 +351,7 @@ BUILTIN.settings.launch = (section = 'look') => {
       for (const d of l) {
         drvBox.append(h('div', { class: 'st-row' },
           h('div', { class: 'st-label st-net' }, h('span', { class: 'ico', html: svgIcon(d.removable ? 'usb' : 'disk') }),
-            h('div', {}, h('div', {}, d.name), h('div', { class: 'muted st-hint' }, `${fmtBytes(d.size)} · ${(d.fs || '').toUpperCase()} · ${d.removable ? 'Çıkarılabilir' : 'Dahili'}${d.mount ? ' · ' + d.mount : ''}`))),
+            h('div', { class: 'st-clip' }, h('div', { class: 'st-clip', title: d.full || d.name }, d.name), h('div', { class: 'muted st-hint' }, TyDrives.describe(d)))),
           h('div', { class: 'st-ctl st-inline' },
             h('button', { class: 'btn primary', onclick: () => TyDrives.open(d).then(drives).catch(fail) }, 'Aç'),
             d.mount || d.removable ? h('button', { class: 'btn', onclick: () => TyDrives.eject(d).then(drives).catch(fail) }, d.removable ? 'Çıkar' : 'Bağlantıyı kes') : null)));
@@ -599,20 +639,40 @@ BUILTIN.store.launch = () => {
     main.replaceChildren(...parts);
   }
 
+  // apt çıktısını sade bir aşama yazısına çevir
+  function stage(txt) {
+    const t = (txt || '').trim();
+    if (!t) return 'Hazırlanıyor…';
+    const last = t.split('\n').pop();
+    if (/^(Get|Alınıyor|İndir)/i.test(last) || /Fetched|indirildi/i.test(last)) return 'İndiriliyor…';
+    if (/Unpacking|açılıyor|Paketten/i.test(last)) return 'Dosyalar açılıyor…';
+    if (/Setting up|Ayarlanıyor|Kuruluyor/i.test(last)) return 'Kuruluyor…';
+    if (/Removing|Kaldırılıyor/i.test(last)) return 'Kaldırılıyor…';
+    if (/Processing triggers|tetikleyici/i.test(last)) return 'Son ayarlar yapılıyor…';
+    if (/Reading|Building|Okunuyor|Oluşturuluyor|Hit|Bağlanıyor|Hazırlanıyor/i.test(last)) return 'Hazırlanıyor…';
+    return 'Çalışıyor…';
+  }
   async function job(action, pkg, title) {
     const id = Date.now().toString(36);
     const log = `/tmp/tyros-pkg-${id}.log`, rc = `/tmp/tyros-pkg-${id}.rc`;
     $$(`button[data-pkg="${pkg}"]`, main).forEach(b => { b.disabled = true; b.textContent = action === 'remove' ? 'Kaldırılıyor…' : 'Kuruluyor…'; });
-    status.hidden = false; status.replaceChildren(h('div', { class: 'sto-spin' }), h('div', { class: 'sto-st' }, h('b', {}, title + '…'), h('pre', {}, '')));
+    const restore = () => { if (view === 'search' && search.value.trim()) doSearch(search.value.trim()); else show(view); };
+    // İndirme gerektiren işlerde önce internet var mı bak (yoksa anlaşılmaz apt hataları yerine net uyarı)
+    if (action !== 'remove') {
+      const net = await tryRun('timeout 6 getent hosts deb.debian.org >/dev/null 2>&1 && echo ok', 10);
+      if (!net.includes('ok')) { notify('İnternet bağlantısı yok', 'Uygulama indirmek için bir ağa bağlanıp tekrar dene.', true, 7000); restore(); return; }
+    }
+    status.hidden = false; status.replaceChildren(h('div', { class: 'sto-spin' }), h('div', { class: 'sto-st' }, h('b', {}, title + '…'), h('pre', {}, 'Hazırlanıyor…')));
     try {
       await run(`(sudo -n /usr/local/sbin/tyros-pkg ${action} ${pkg ? q(pkg) : ''} >${log} 2>&1; echo $? >${rc}) >/dev/null 2>&1 &`);
     } catch (e) { status.hidden = true; return fail(e); }
     const poll = setInterval(async () => {
       const out = await tryRun(`tail -n 4 ${log} 2>/dev/null; echo "@@"; cat ${rc} 2>/dev/null`);
       const [txt, code] = out.split('@@');
-      $('pre', status).textContent = (txt || '').trim().split('\n').slice(-3).join('\n');
+      $('pre', status).textContent = stage(txt);
       if (code && code.trim() !== '') {
         clearInterval(poll);
+        const full = code.trim() === '0' ? '' : await tryRun(`tail -n 80 ${log} 2>/dev/null`);
         tryRun(`rm -f ${log} ${rc}`);
         status.hidden = true;
         if (code.trim() === '0') {
@@ -621,7 +681,7 @@ BUILTIN.store.launch = () => {
           notify('Tamamlandı', title.replace('kuruluyor', 'kuruldu').replace('kaldırılıyor', 'kaldırıldı').replace('güncelleniyor', 'güncellendi'));
           Shell.loadApps(true);
         } else {
-          notify('İşlem başarısız', (txt || '').trim().split('\n').slice(-2).join(' ') || 'Ayrıntı yok', true, 8000);
+          notify('İşlem başarısız', full || txt || '', true, 9000);
         }
         if (view === 'search' && search.value.trim()) doSearch(search.value.trim()); else show(view);
       }

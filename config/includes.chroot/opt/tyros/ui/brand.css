@@ -208,3 +208,12 @@ html, body, #boot { background: #0b1220; }
 .fm-eject svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .sto-feat-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .sto-feat-head h3 { margin: 0; }
+/* Uzun adlar taşmasın: sonuna … */
+.st-clip { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-label.st-net { min-width: 0; }
+.fm-side { min-width: 0; overflow: hidden; }
+.fm-drive, .fm-drives { min-width: 0; }
+.fm-drive > button:first-child { display: block; }
+.qp-dname, .qp-dname b, .qp-dname small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast { overflow-wrap: anywhere; }
+.mon-sys { display: inline-block; font-size: 11.5px; padding: 2px 8px; border-radius: 10px; background: var(--stone-3); color: var(--mist); cursor: help; }

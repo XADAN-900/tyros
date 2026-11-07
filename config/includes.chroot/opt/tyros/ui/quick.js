@@ -78,9 +78,10 @@ const Drives = {
       if (devs.some(x => (x.pkname === parent.name || x.name === parent.name) && (x.mountpoint || '').startsWith('/run/live'))) continue;
       const removable = !!(parent.rm || parent.hotplug || parent.tran === 'usb' || d.rm || d.hotplug);
       const model = [parent.vendor, parent.model].filter(Boolean).join(' ').trim();
+      const full = d.label || model || (removable ? 'USB bellek' : 'Yerel disk');
       res.push({
-        path: d.path, parent: parent.path, size: Number(d.size) || 0, fs, mount: mp, removable,
-        name: d.label || model || (removable ? 'USB sürücü' : 'Yerel disk'),
+        path: d.path, parent: parent.path, size: Number(d.size) || 0, fs, mount: mp, removable, full,
+        name: full.length > 26 ? full.slice(0, 25).trim() + '…' : full,   // çok uzun adlar taşmasın
       });
     }
     this.list = res;
@@ -107,6 +108,12 @@ const Drives = {
     Drives.changed();
   },
   label(dr) { return `${dr.name} · ${fmtBytes(dr.size)}`; },
+  // Herkesin anlayacağı kısa açıklama: "7,5 GB · USB bellek · FAT32"
+  describe(dr) {
+    const FS = { vfat: 'FAT32', exfat: 'exFAT', ntfs: 'NTFS (Windows)', ntfs3: 'NTFS (Windows)', ext4: 'Linux', ext3: 'Linux', ext2: 'Linux', btrfs: 'Linux', xfs: 'Linux', iso9660: 'CD/DVD kalıbı', hfsplus: 'Mac' };
+    return [fmtBytes(dr.size), dr.removable ? 'USB bellek' : 'Bilgisayardaki disk', FS[dr.fs] || (dr.fs || '').toUpperCase(), dr.mount ? 'Açık' : '']
+      .filter(Boolean).join(' · ');
+  },
   listeners: new Set(),
   changed() { this.scan().then(l => this.listeners.forEach(fn => fn(l))); },
 };
@@ -260,8 +267,8 @@ const QP = {
     for (const d of l) {
       this.drives.append(h('div', { class: 'qp-drive' },
         h('span', { class: 'qp-ti', html: svgIcon('usb') }),
-        h('button', { class: 'qp-dname', title: 'Dosyalar\'da aç', onclick: () => { Shell.closePopups(); Drives.open(d).catch(fail); } },
-          h('b', {}, d.name), h('small', {}, `${fmtBytes(d.size)}${d.fs ? ' · ' + d.fs.toUpperCase() : ''}`)),
+        h('button', { class: 'qp-dname', title: `${d.full || d.name} — Dosyalar'da aç`, onclick: () => { Shell.closePopups(); Drives.open(d).catch(fail); } },
+          h('b', {}, d.name), h('small', {}, Drives.describe(d))),
         h('button', { class: 'qp-mini', title: 'Güvenle çıkar', html: svgIcon('eject'), onclick: () => Drives.eject(d).catch(fail) })));
     }
   },
