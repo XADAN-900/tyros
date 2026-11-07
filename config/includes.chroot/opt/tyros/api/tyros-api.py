@@ -636,6 +636,22 @@ def r_blockgen(q, body):
     return {"sig": str(hash(("|".join(devs), mounts)))}
 
 
+def r_events(q, body):
+    """Kısayol tuşu olayları (ses, parlaklık, ekran görüntüsü): tyros-key yazar, arayüz okur."""
+    p = os.path.join(HOME, ".cache/tyros/events")
+    tmp = p + ".okunuyor"
+    try:
+        os.replace(p, tmp)
+    except FileNotFoundError:
+        return []
+    lines = read(tmp).splitlines()
+    try:
+        os.remove(tmp)
+    except OSError:
+        pass
+    return [l.split("|", 1) for l in lines if "|" in l][-20:]
+
+
 def r_ping(q, body):
     return {"ok": True, "name": "TyrOS", "version": "1.0", "term": have("ttyd")}
 
@@ -643,6 +659,7 @@ def r_ping(q, body):
 ROUTES = {
     ("GET", "/api/ping"): r_ping,
     ("GET", "/api/blockgen"): r_blockgen,
+    ("GET", "/api/events"): r_events,
     ("GET", "/api/sysinfo"): r_sysinfo,
     ("GET", "/api/apps"): r_apps,
     ("POST", "/api/launch"): r_launch,
