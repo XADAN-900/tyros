@@ -4,6 +4,13 @@ desktop-color: "#0b1220"
 title-text: ""
 message-font: "Unifont Regular 16"
 terminal-font: "Unifont Regular 16"
+# Yükleme sırasındaki yazı alanı tüm ekranı kaplasın ve kenarlığı olmasın
+# (yoksa ortada siyah bir kutu olarak görünür)
+terminal-left: "0"
+terminal-top: "0"
+terminal-width: "100%"
+terminal-height: "100%"
+terminal-border: "0"
 
 # Menü logonun altında; her ekran boyutunda tüm seçenekler görünsün diye geniş alan
 + boot_menu {
