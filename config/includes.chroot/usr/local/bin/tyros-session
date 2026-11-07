@@ -64,14 +64,15 @@ read -r W H < <(xdpyinfo 2>/dev/null | awk '/dimensions:/{split($2,a,"x"); print
 
 # Arayüz penceresi her zaman tüm ekranı kaplasın: ekran çözünürlüğü değişirse
 # (ör. sanal makine penceresi büyütülünce) ya da pencere eksik boyutta açılırsa düzelt.
-( N=0; LAST=""
-  while sleep 2 && xset q >/dev/null 2>&1; do
+# Açılışta ve arayüz penceresi yeniden açıldığında ilk ~20 sn sık (0,3 sn) denetle ki
+# masaüstü daha ilk anda tam ekran olsun; sonra işlemciyi yormamak için 10 sn'de bir.
+( N=0; LAST=""; FAST=0; LASTWID=""
+  while xset q >/dev/null 2>&1; do
+    if [ "$FAST" -lt 60 ]; then sleep 0.3; FAST=$((FAST + 1)); else sleep 2; fi
     read -r SW SH < <(xdotool getdisplaygeometry 2>/dev/null)
     [ -n "$SH" ] || continue
-    # Ekran boyutu değişmediyse pencereyi 10 sn'de bir denetle (işlemciyi boşuna yormasın)
     N=$((N + 1))
-    if [ "${SW}x${SH}" = "$LAST" ] && [ $((N % 5)) -ne 0 ]; then continue; fi
-    LAST="${SW}x${SH}"
+    if [ "$FAST" -ge 60 ] && [ "${SW}x${SH}" = "$LAST" ] && [ $((N % 5)) -ne 0 ]; then continue; fi
     best=""; best_area=0
     for wid in $(xdotool search --onlyvisible --class TyrOSShell 2>/dev/null); do
       eval "$(xdotool getwindowgeometry --shell "$wid" 2>/dev/null)" || continue
@@ -80,9 +81,12 @@ read -r W H < <(xdpyinfo 2>/dev/null | awk '/dimensions:/{split($2,a,"x"); print
         best=$wid; best_area=$area; BW=$WIDTH; BH=$HEIGHT; BX=$X; BY=$Y
       fi
     done
-    [ -n "$best" ] || continue
+    [ -n "$best" ] || { FAST=0; continue; }          # pencere henüz yok: sık denetlemeye devam
+    [ "$best" = "$LASTWID" ] || { LASTWID=$best; FAST=0; }   # yeni pencere: yine sık denetle
     if [ "$BW" -ne "$SW" ] || [ "$BH" -ne "$SH" ] || [ "$BX" -ne 0 ] || [ "$BY" -ne 0 ]; then
       xdotool windowmove "$best" 0 0 windowsize "$best" "$SW" "$SH" 2>/dev/null
+    else
+      LAST="${SW}x${SH}"
     fi
   done ) &
 
