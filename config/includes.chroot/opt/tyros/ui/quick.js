@@ -88,20 +88,30 @@ const Drives = {
     return res;
   },
   async open(dr) { BUILTIN.files.launch(await this.mount(dr)); },
+  // "Mounted /dev/sdb1 at /media/tyros/USB" ya da "already mounted at `/media/...'" çıktısından yolu al
+  mountPath(t) { const m = /\bat\s+[`']?(\/[^`'\n]+?)[`']?\.?\s*$/m.exec(t || ''); return m ? m[1] : null; },
   async mount(dr) {
-    let mp = dr.mount;
+    if (dr.mount) return dr.mount;
+    const r = await ex(`udisksctl mount -b ${sh(dr.path)} --no-user-interaction 2>&1`, 40);
+    let mp = this.mountPath(r.stdout);
     if (!mp) {
-      const r = await ex(`udisksctl mount -b ${sh(dr.path)} --no-user-interaction 2>&1`, 40);
-      const m = /at (\/.+?)\.?\s*$/m.exec(r.stdout || '');
-      if (!m) throw new Error((r.stdout || r.stderr || 'Sürücü bağlanamadı').trim().split('\n').pop());
-      mp = m[1]; dr.mount = mp;
+      // udisks izin vermedi ya da açamadı: TyrOS'un kendi yardımcısıyla dene
+      const r2 = await ex(`sudo -n /usr/local/sbin/tyros-mount mount ${sh(dr.path)} 2>&1`, 60);
+      mp = this.mountPath(r2.stdout);
+      if (!mp) throw new Error((r2.stdout || r.stdout || 'Sürücü açılamadı').trim());
     }
+    dr.mount = mp;
     return mp;
   },
   async eject(dr) {
     if (dr.mount) {
       const r = await ex(`udisksctl unmount -b ${sh(dr.path)} --no-user-interaction 2>&1`, 40);
-      if (r.code !== 0) throw new Error(/busy|meşgul/i.test(r.stdout || '') ? 'Sürücü kullanımda. Açık dosyaları kapatıp tekrar dene.' : (r.stdout || 'Çıkarılamadı').trim().split('\n').pop());
+      if (r.code !== 0) {
+        if (/busy|meşgul/i.test(r.stdout || '')) throw new Error('target is busy');
+        const r2 = await ex(`sudo -n /usr/local/sbin/tyros-mount unmount ${sh(dr.path)} 2>&1`, 40);
+        if (r2.code !== 0) throw new Error((r2.stdout || r.stdout || 'Çıkarılamadı').trim());
+      }
+      dr.mount = '';
     }
     if (dr.removable) await ex(`udisksctl power-off -b ${sh(dr.parent)} --no-user-interaction 2>&1`, 30);
     notify('Güvenle çıkarılabilir', `${dr.name} artık çıkarılabilir.`);
@@ -137,13 +147,13 @@ async function watchDrives() {
     if (known) {
       const added = l.filter(d => !known.has(d.path) && d.removable);
       for (const d of added) {
-        if (!d.mount) await ex(`udisksctl mount -b ${sh(d.path)} --no-user-interaction 2>&1`, 40).then(r => {
-          const m = /at (\/.+?)\.?\s*$/m.exec(r.stdout || ''); if (m) d.mount = m[1];
-        });
+        await Drives.mount(d).catch(() => {});   // açılamazsa tıklanınca tekrar denenir ve sebebi gösterilir
+        window.TySound?.play('plug', true);
         notify('USB sürücü takıldı', `${Drives.label(d)} — açmak için tıkla`);
         const t = $('#toasts')?.lastElementChild;
         if (t) { t.style.cursor = 'pointer'; t.addEventListener('click', () => { t.remove(); Drives.open(d).catch(fail); }); }
       }
+      if ([...known].some(p => !keys.has(p) && /^\/dev\/sd/.test(p))) window.TySound?.play('unplug');
       Drives.listeners.forEach(fn => fn(l));
     }
     known = keys;
@@ -152,6 +162,45 @@ async function watchDrives() {
   const safeTick = async () => { if (busy) return; busy = true; try { await tick(); } catch { /* sonraki tur */ } busy = false; };
   await safeTick();
   setInterval(safeTick, 2000);
+}
+
+/* ---------------------------------------------------------------- kısayol tuşu olayları + ekran göstergesi */
+function osd(icon, text, percent) {
+  let el = $('#tyOsd');
+  if (!el) { el = h('div', { id: 'tyOsd' }); document.body.append(el); }
+  el.innerHTML = `${svgIcon(icon)}<span>${esc(text)}</span>` + (percent == null ? '' : `<i><b style="width:${Math.max(0, Math.min(100, percent))}%"></b></i>`);
+  el.classList.add('on');
+  clearTimeout(osd.t); osd.t = setTimeout(() => el.classList.remove('on'), 1400);
+}
+async function pollEvents() {
+  let evs = [];
+  try { evs = await API.get('/api/events'); } catch { return; }
+  for (const [type, val] of evs) {
+    if (type === 'vol') {
+      const m = /([\d.]+)/.exec(val || ''); const p = m ? Math.round(parseFloat(m[1]) * 100) : 0;
+      const muted = /MUTED/.test(val || '');
+      osd(muted ? 'mute' : 'vol', muted ? 'Ses kapalı' : `Ses %${p}`, muted ? 0 : p);
+      Shell.refreshTray?.();
+    } else if (type === 'bright') {
+      const p = parseInt(val, 10) || 0; osd('sun', `Parlaklık %${p}`, p);
+    } else if (type === 'shot') {
+      window.TySound?.play('shot', true);
+      notify('Ekran görüntüsü kaydedildi', `${(val || '').split('/').pop()} — açmak için tıkla`);
+      const t = $('#toasts')?.lastElementChild;
+      if (t) { t.style.cursor = 'pointer'; t.addEventListener('click', () => { t.remove(); API.post('/api/open', { path: val }).catch(fail); }); }
+    }
+  }
+}
+// Pil azalınca uyar (yalnızca pilde çalışırken)
+let batWarned = 100;
+async function checkBattery() {
+  try {
+    const b = (await API.get('/api/sysinfo')).battery;
+    if (!b) return;
+    if (b.status === 'Charging' || b.status === 'Full') { batWarned = 100; return; }
+    if (b.percent <= 5 && batWarned > 5) { batWarned = 5; notify('Pil çok az', `%${b.percent} kaldı. Bilgisayar birazdan kapanabilir — hemen şarja tak.`, true, 15000); }
+    else if (b.percent <= 15 && batWarned > 15) { batWarned = 15; notify('Pil azaldı', `%${b.percent} kaldı. Şarja takman önerilir.`, true, 10000); }
+  } catch { /* sonraki tur */ }
 }
 
 /* ---------------------------------------------------------------- hızlı panel */
@@ -311,6 +360,8 @@ window.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     if (Settings.data.nightLight) Display.apply();
     watchDrives();
+    setInterval(pollEvents, 1500);
+    checkBattery(); setInterval(checkBattery, 60000);
   }, 2500);
 });
 })();

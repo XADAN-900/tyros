@@ -85,11 +85,32 @@ function friendlyError(text) {
   return line.length > 160 ? line.slice(0, 157) + '…' : line;
 }
 window.friendlyError = friendlyError;
+/* Bildirim sesleri — dosya gerekmez, kısa tonlar tarayıcıda üretilir */
+const Sound = {
+  ctx: null, skip: false,
+  TONES: { info: [[880, 0], [1320, .09]], error: [[520, 0], [390, .13]], plug: [[660, 0], [990, .08]], unplug: [[990, 0], [660, .08]], shot: [[1600, 0], [1200, .05]] },
+  play(kind, thenSkipNextNotify) {
+    if (thenSkipNextNotify) this.skip = true;
+    if (Settings.data.sounds === false || Settings.data.quietNotify) return;
+    try {
+      const c = this.ctx || (this.ctx = new AudioContext());
+      if (c.state === 'suspended') c.resume();
+      for (const [f, at] of this.TONES[kind] || this.TONES.info) {
+        const o = c.createOscillator(), g = c.createGain(), t0 = c.currentTime + at;
+        o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(.11, t0 + .015); g.gain.exponentialRampToValueAtTime(.0001, t0 + .32);
+        o.connect(g).connect(c.destination); o.start(t0); o.stop(t0 + .35);
+      }
+    } catch { /* ses kartı yoksa sessiz geç */ }
+  },
+};
+window.TySound = Sound;
 const _notify = notify;
 // eslint-disable-next-line no-global-assign
 notify = function (title, text = '', isErr = false, ms) {
   if (!isErr && Settings.data.quietNotify) return;
   if (isErr) text = friendlyError(text);
+  if (Sound.skip) Sound.skip = false; else Sound.play(isErr ? 'error' : 'info');
   return _notify(title, text, isErr, ms);
 };
 
@@ -377,7 +398,8 @@ BUILTIN.settings.launch = (section = 'look') => {
   /* ---------------------------------------------------------------- Bildirimler */
   function notifications() {
     body.append(group(null,
-      row('Rahatsız etme', toggle(!!Settings.data.quietNotify, v => Settings.set({ quietNotify: v })), 'Açıkken sadece hata bildirimleri görünür'),
+      row('Rahatsız etme', toggle(!!Settings.data.quietNotify, v => Settings.set({ quietNotify: v })), 'Açıkken sadece hata bildirimleri görünür, ses çalmaz'),
+      row('Bildirim sesleri', toggle(Settings.data.sounds !== false, v => Settings.set({ sounds: v })), 'Bildirim, USB takma/çıkarma ve ekran görüntüsü sesleri'),
       row('Dene', h('button', { class: 'btn', onclick: () => _notify('Örnek bildirim', 'Bildirimler böyle görünür.') }, 'Örnek göster'))));
   }
 
