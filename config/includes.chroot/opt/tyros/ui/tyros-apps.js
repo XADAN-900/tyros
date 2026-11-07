@@ -57,10 +57,11 @@ notify = function (title, text = '', isErr = false, ms) {
 /* ================================================================ AYARLAR */
 BUILTIN.settings.launch = (section = 'look') => {
   const SECTIONS = [
-    ['look', 'Görünüm', 'image', look], ['display', 'Ekran', 'monitor', display], ['sound', 'Ses', 'vol', sound],
-    ['net', 'Ağ ve internet', 'wifi', net], ['bluetooth', 'Bluetooth ve aygıtlar', 'bt', bluetooth], ['keyboard', 'Klavye ve dil', 'editor', keyboard], ['time', 'Tarih ve saat', 'info', time],
-    ['power', 'Güç ve ekran koruyucu', 'power', power], ['storage', 'Depolama', 'package', storage],
-    ['apps', 'Varsayılan uygulamalar', 'store', defaults], ['notify', 'Bildirimler', 'settings', notifications], ['system', 'Sistem', 'home', system],
+    ['net', 'Ağ ve internet', 'wifi', net], ['bluetooth', 'Bluetooth', 'bt', bluetooth],
+    ['display', 'Ekran', 'monitor', display], ['sound', 'Ses', 'vol', sound], ['look', 'Kişiselleştirme', 'image', look],
+    ['notify', 'Bildirimler', 'bell', notifications], ['power', 'Güç ve pil', 'power', power], ['storage', 'Depolama ve sürücüler', 'disk', storage],
+    ['keyboard', 'Klavye ve dil', 'editor', keyboard], ['time', 'Tarih ve saat', 'info', time],
+    ['apps', 'Varsayılan uygulamalar', 'store', defaults], ['system', 'Sistem hakkında', 'home', system],
   ];
   const side = h('nav', { class: 'st-side' });
   const body = h('div', { class: 'st-body' });
@@ -115,7 +116,7 @@ BUILTIN.settings.launch = (section = 'look') => {
       const mm = line.match(/^\s+(\d+x\d+)\s+(.*)$/);
       if (mm && cur && !cur.modes.some(x => x.res === mm[1])) cur.modes.push({ res: mm[1], rates: mm[2].replace(/[*+]/g, '').trim().split(/\s+/).filter(Boolean) });
     }
-    if (!outputs.length) { box.append(group(null, h('div', { class: 'muted st-pad' }, 'Ekran bilgisi alınamadı.'))); return; }
+    if (!outputs.length) box.append(group(null, h('div', { class: 'muted st-pad' }, 'Ekran bilgisi alınamadı.')));
     for (const o of outputs) {
       const resSel = select(o.modes.map(m => [m.res, m.res.replace('x', ' × ')]), o.current, async v => {
         try { await run(`xrandr --output ${q(o.name)} --mode ${q(v)}`); notify('Çözünürlük değişti', v.replace('x', ' × ')); } catch (e) { fail(e); }
@@ -123,12 +124,15 @@ BUILTIN.settings.launch = (section = 'look') => {
       const bright = h('input', { type: 'range', min: 40, max: 100, value: Math.round((Settings.data.output === o.name ? Settings.data.brightness || 1 : 1) * 100), class: 'st-range' });
       bright.addEventListener('change', () => {
         const v = bright.value / 100;
-        run(`xrandr --output ${q(o.name)} --brightness ${v}`).then(() => Settings.set({ output: o.name, brightness: v })).catch(fail);
+        Promise.resolve(Settings.set({ output: o.name, brightness: v })).then(() => window.TyDisplay ? TyDisplay.apply() : run(`xrandr --output ${q(o.name)} --brightness ${v}`)).catch(fail);
       });
       box.append(group(o.name + (o.primary ? ' (ana ekran)' : ''),
         row('Çözünürlük', resSel),
         row('Parlaklık', bright, 'Yazılımla ayarlanır; dizüstünde klavye tuşları da çalışır')));
     }
+    box.append(group('Gece ışığı',
+      row('Gece ışığı', toggle(!!Settings.data.nightLight, async v => { await Settings.set({ nightLight: v }); window.TyDisplay?.apply(); }),
+        'Ekranın mavi ışığını azaltır, gözü yormaz')));
   }
 
   /* ---------------------------------------------------------------- Ses */
@@ -183,12 +187,9 @@ BUILTIN.settings.launch = (section = 'look') => {
     const bt = (cmd, t = 10) => tryRun(`timeout ${t} bluetoothctl ${cmd} 2>&1`, t + 5);
     const btBox = h('div', { class: 'st-card' }, h('div', { class: 'muted st-pad' }, 'Bluetooth denetleniyor…'));
     const devBox = h('div', { class: 'st-card' });
-    const drvBox = h('div', { class: 'st-card' }, h('div', { class: 'muted st-pad' }, 'Sürücüler okunuyor…'));
     const scanBtn = h('button', { class: 'btn', html: svgIcon('refresh') + 'Aygıt ara' });
     body.append(group('Bluetooth', btBox),
-      h('div', { class: 'st-group' }, h('div', { class: 'st-gtitle st-gtitle-row' }, 'Bluetooth aygıtları', scanBtn), devBox),
-      h('div', { class: 'st-group' }, h('div', { class: 'st-gtitle st-gtitle-row' }, 'Sürücüler (USB ve diskler)',
-        h('button', { class: 'btn', html: svgIcon('refresh') + 'Yenile', onclick: () => drives() })), drvBox));
+      h('div', { class: 'st-group' }, h('div', { class: 'st-gtitle st-gtitle-row' }, 'Bluetooth aygıtları', scanBtn), devBox));
 
     const parse = txt => txt.split('\n').map(l => l.match(/^Device ([0-9A-F:]{17}) (.+)$/i)).filter(Boolean).map(m => ({ mac: m[1], name: m[2].trim() }));
     async function devices() {
@@ -226,20 +227,6 @@ BUILTIN.settings.launch = (section = 'look') => {
       devices();
     });
 
-    async function drives() {
-      const l = await TyDrives.scan();
-      drvBox.replaceChildren();
-      if (!l.length) { drvBox.append(h('div', { class: 'muted st-pad' }, 'Takılı USB bellek ya da ek disk yok.')); return; }
-      for (const d of l) {
-        drvBox.append(h('div', { class: 'st-row' },
-          h('div', { class: 'st-label st-net' }, h('span', { class: 'ico', html: svgIcon(d.removable ? 'usb' : 'disk') }),
-            h('div', {}, h('div', {}, d.name), h('div', { class: 'muted st-hint' }, `${fmtBytes(d.size)} · ${(d.fs || '').toUpperCase()} · ${d.removable ? 'Çıkarılabilir' : 'Dahili'}${d.mount ? ' · ' + d.mount : ''}`))),
-          h('div', { class: 'st-ctl st-inline' },
-            h('button', { class: 'btn primary', onclick: () => TyDrives.open(d).then(drives).catch(fail) }, 'Aç'),
-            d.mount || d.removable ? h('button', { class: 'btn', onclick: () => TyDrives.eject(d).then(drives).catch(fail) }, d.removable ? 'Çıkar' : 'Bağlantıyı kes') : null)));
-      }
-    }
-    drives();
 
     const info = await bt('show', 3);
     btBox.replaceChildren();
@@ -303,7 +290,8 @@ BUILTIN.settings.launch = (section = 'look') => {
   /* ---------------------------------------------------------------- Depolama */
   async function storage() {
     const out = await tryRun("df -B1 --output=source,target,size,used,fstype -x tmpfs -x devtmpfs -x squashfs -x overlay -x efivarfs 2>/dev/null | tail -n +2");
-    const disks = out.trim().split('\n').filter(Boolean).map(l => l.trim().split(/\s+/)).map(([src, target, size, used, fs]) => ({ src, target, size: +size, used: +used, fs }));
+    const disks = out.trim().split('\n').filter(Boolean).map(l => l.trim().split(/\s+/)).map(([src, target, size, used, fs]) => ({ src, target, size: +size, used: +used, fs }))
+      .filter(d => !/^\/(run\/)?media\//.test(d.target));   // takılı USB'ler aşağıda ayrıca listelenir
     if (!disks.length) { body.append(group(null, h('div', { class: 'muted st-pad' }, 'Bu oturumda kalıcı disk yok (USB/ISO\'dan canlı çalışıyor).'))); }
     for (const d of disks) {
       const p = d.size ? d.used / d.size * 100 : 0;
@@ -313,6 +301,23 @@ BUILTIN.settings.launch = (section = 'look') => {
           h('div', { class: 'bar st-bar' }, h('i', { style: { width: p + '%', background: p > 90 ? 'var(--danger)' : 'var(--accent)' } })),
           h('div', { class: 'muted st-hint' }, `${d.src} · ${d.fs}`))));
     }
+    const drvBox = h('div', { class: 'st-card' }, h('div', { class: 'muted st-pad' }, 'Sürücüler okunuyor…'));
+    body.append(h('div', { class: 'st-group' }, h('div', { class: 'st-gtitle st-gtitle-row' }, 'Takılı sürücüler (USB bellek ve diğer diskler)',
+      h('button', { class: 'btn', html: svgIcon('refresh') + 'Yenile', onclick: () => drives() })), drvBox));
+    async function drives() {
+      const l = await TyDrives.scan();
+      drvBox.replaceChildren();
+      if (!l.length) { drvBox.append(h('div', { class: 'muted st-pad' }, 'Takılı USB bellek ya da ek disk yok.')); return; }
+      for (const d of l) {
+        drvBox.append(h('div', { class: 'st-row' },
+          h('div', { class: 'st-label st-net' }, h('span', { class: 'ico', html: svgIcon(d.removable ? 'usb' : 'disk') }),
+            h('div', {}, h('div', {}, d.name), h('div', { class: 'muted st-hint' }, `${fmtBytes(d.size)} · ${(d.fs || '').toUpperCase()} · ${d.removable ? 'Çıkarılabilir' : 'Dahili'}${d.mount ? ' · ' + d.mount : ''}`))),
+          h('div', { class: 'st-ctl st-inline' },
+            h('button', { class: 'btn primary', onclick: () => TyDrives.open(d).then(drives).catch(fail) }, 'Aç'),
+            d.mount || d.removable ? h('button', { class: 'btn', onclick: () => TyDrives.eject(d).then(drives).catch(fail) }, d.removable ? 'Çıkar' : 'Bağlantıyı kes') : null)));
+      }
+    }
+    drives();
     body.append(group('Temizlik',
       row('Çöp kutusu', h('button', { class: 'btn', onclick: () => BUILTIN.trash.launch() }, 'Aç')),
       row('Gereksiz paket dosyaları', h('button', { class: 'btn', onclick: () => run('sudo -n /usr/local/sbin/tyros-pkg clean', 300).then(() => notify('Temizlendi', 'İndirilmiş paket dosyaları silindi')).catch(fail) }, 'Temizle'))));
@@ -332,7 +337,7 @@ BUILTIN.settings.launch = (section = 'look') => {
   /* ---------------------------------------------------------------- Bildirimler */
   function notifications() {
     body.append(group(null,
-      row('Bilgi bildirimlerini göster', toggle(!Settings.data.quietNotify, v => Settings.set({ quietNotify: !v })), 'Kapalıyken sadece hata bildirimleri görünür'),
+      row('Rahatsız etme', toggle(!!Settings.data.quietNotify, v => Settings.set({ quietNotify: v })), 'Açıkken sadece hata bildirimleri görünür'),
       row('Dene', h('button', { class: 'btn', onclick: () => _notify('Örnek bildirim', 'Bildirimler böyle görünür.') }, 'Örnek göster'))));
   }
 
@@ -342,9 +347,7 @@ BUILTIN.settings.launch = (section = 'look') => {
     body.append(group('Bu bilgisayar', dl),
       group('İşlemler', h('div', { class: 'st-row st-btns' },
         h('button', { class: 'btn', onclick: () => BUILTIN.monitor.launch() }, 'Sistem izleyici'),
-        h('button', { class: 'btn', onclick: () => BUILTIN.about.launch() }, 'TyrOS hakkında'),
-        h('button', { class: 'btn', onclick: () => Shell.power('reboot') }, 'Yeniden başlat'),
-        h('button', { class: 'btn danger', onclick: () => Shell.power('shutdown') }, 'Bilgisayarı kapat'))));
+        h('button', { class: 'btn', onclick: () => BUILTIN.about.launch() }, 'TyrOS hakkında'))));
     const fill = async () => {
       try {
         const s = await API.get('/api/sysinfo');
@@ -828,4 +831,21 @@ document.addEventListener('keydown', e => {
     e.preventDefault(); e.stopPropagation();
   }
 }, true);
+/* Arayüz bir tarayıcı değil: Chromium'un kendi kısayollarını (bul çubuğu, yazdır, sayfayı
+   kaydet, yenile, yakınlaştır, geçmiş, indirilenler…) kapat. Yalnızca tarayıcının kendi
+   işi engellenir; uygulamaların kendi kısayolları (ör. not defterinde Ctrl+S) çalışmaya devam eder. */
+const BROWSER_KEYS = new Set(['F3', 'F5', 'F6', 'F7', 'F11', 'BROWSERBACK', 'BROWSERFORWARD', 'BROWSERREFRESH', 'BROWSERHOME', 'BROWSERSEARCH']);
+const BROWSER_CTRL = new Set(['F', 'G', 'P', 'S', 'O', 'R', 'H', 'J', 'D', 'E', 'K', 'L', 'N', 'T', 'W', '+', '=', '-', '_', '0', 'F4', 'F5']);
+const BROWSER_CTRL_SHIFT = new Set(['G', 'B', 'O', 'N', 'T', 'R', 'Q', 'W', 'A', 'M', 'DELETE']);
+document.addEventListener('keydown', e => {
+  const k = e.key.toUpperCase();
+  const block = (!e.ctrlKey && !e.altKey && BROWSER_KEYS.has(k))
+    || (e.ctrlKey && !e.shiftKey && !e.altKey && BROWSER_CTRL.has(k))
+    || (e.ctrlKey && e.shiftKey && !e.altKey && BROWSER_CTRL_SHIFT.has(k))
+    || (e.altKey && !e.ctrlKey && ['ARROWLEFT', 'ARROWRIGHT', 'HOME', 'D'].includes(k))
+    || (e.shiftKey && !e.ctrlKey && k === 'ESCAPE');
+  if (block) e.preventDefault();
+}, true);
+// Ctrl + fare tekerleği ile arayüz yakınlaşıp uzaklaşmasın
+window.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, { passive: false, capture: true });
 })();

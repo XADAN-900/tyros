@@ -111,6 +111,7 @@ const Drives = {
   changed() { this.scan().then(l => this.listeners.forEach(fn => fn(l))); },
 };
 window.TyDrives = Drives;
+window.TyDisplay = Display;
 
 // Takılan USB'leri yakala: yeni sürücü gelince bağla ve haber ver
 async function watchDrives() {
