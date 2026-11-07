@@ -116,6 +116,7 @@ while xset q >/dev/null 2>&1; do
     --disable-features=Translate,TranslateUI,DownloadBubble,DownloadBubbleV2,MediaRouter,GlobalMediaControls,ChromeWhatsNewUI,PrivacySandboxSettings4,OptimizationGuideModelDownloading,OptimizationHintsFetching,OptimizationTargetPrediction,AutofillServerCommunication,InterestFeedContentSuggestions \
     --disable-component-update --disable-background-networking --disable-sync --no-pings \
     --disable-breakpad --disable-domain-reliability --disable-client-side-phishing-detection \
+    --autoplay-policy=no-user-gesture-required \
     "${LOWMEM[@]}" \
     >>"$LOG/shell.log" 2>&1
   sleep 1

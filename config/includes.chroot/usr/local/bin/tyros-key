@@ -1,0 +1,32 @@
+#!/bin/sh
+# TyrOS kısayol tuşları (Openbox'tan çağrılır): ses, parlaklık, ekran görüntüsü.
+# Arayüz bu olayları ~/.cache/tyros/events dosyasından okuyup ekranda gösterir.
+EV="$HOME/.cache/tyros/events"
+mkdir -p "$HOME/.cache/tyros"
+emit() { printf '%s|%s\n' "$1" "$2" >> "$EV"; }
+SINK=@DEFAULT_AUDIO_SINK@
+case "$1" in
+  vol-up)   wpctl set-mute $SINK 0 2>/dev/null; wpctl set-volume -l 1.0 $SINK 5%+ ;;
+  vol-down) wpctl set-volume $SINK 5%- ;;
+  mute)     wpctl set-mute $SINK toggle ;;
+  bright-up|bright-down)
+    cur=$(brightnessctl -m 2>/dev/null | cut -d, -f4 | tr -d %)
+    [ -n "$cur" ] || exit 0
+    if [ "$1" = bright-up ]; then brightnessctl -q set 10%+
+    elif [ "$cur" -gt 15 ]; then brightnessctl -q set 10%-
+    else brightnessctl -q set 5%; fi
+    emit bright "$(brightnessctl -m 2>/dev/null | cut -d, -f4 | tr -d %)"
+    exit 0 ;;
+  shot|shot-window|shot-area)
+    DIR="$(xdg-user-dir PICTURES 2>/dev/null)"; [ -n "$DIR" ] && [ "$DIR" != "$HOME" ] || DIR="$HOME/Resimler"
+    DIR="$DIR/Ekran görüntüleri"; mkdir -p "$DIR"
+    F="$DIR/Ekran görüntüsü $(date '+%Y-%m-%d %H.%M.%S').png"
+    case "$1" in
+      shot)        scrot -o "$F" ;;
+      shot-window) scrot -o -u "$F" ;;
+      shot-area)   scrot -o -s -f "$F" ;;
+    esac && [ -f "$F" ] && emit shot "$F"
+    exit 0 ;;
+  *) echo "Kullanım: tyros-key vol-up|vol-down|mute|bright-up|bright-down|shot|shot-window|shot-area" >&2; exit 2 ;;
+esac
+emit vol "$(wpctl get-volume $SINK 2>/dev/null)"
