@@ -224,7 +224,14 @@ const Shell = {
     setInterval(() => this.pollNativeWindows(), 2000);
     setInterval(() => this.loadApps(), 60000);   // yeni kurulan uygulamaları menüye ekle
     this.bind();
-    setTimeout(() => $('#boot').classList.add('gone'), 300);
+    // Açılış ekranı, duvar kağıdı tamamen yüklenip masaüstü hazır olunca kalksın (yarım görüntü olmasın)
+    const wpUrl = (/url\('([^']+)'\)/.exec($('#wallpaper')?.innerHTML || '') || [])[1];
+    await Promise.race([
+      new Promise(r => { if (!wpUrl) return r(); const i = new Image(); i.onload = i.onerror = () => (i.decode ? i.decode().catch(() => {}).then(r) : r()); i.src = wpUrl; }),
+      new Promise(r => setTimeout(r, 4000)),
+    ]);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    setTimeout(() => $('#boot').classList.add('gone'), 150);
     setTimeout(() => $('#boot').remove(), 1000);
   },
 
