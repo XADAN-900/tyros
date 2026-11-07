@@ -123,7 +123,7 @@ BUILTIN.files.launch = async (startPath) => {
       if (!l.length) return;
       drvBox.append(h('div', { class: 'fm-sidetitle' }, 'Sürücüler'));
       for (const d of l) drvBox.append(h('div', { class: 'fm-drive' },
-        h('button', { 'data-path': d.mount || '', title: `${d.name} · ${fmtBytes(d.size)}`,
+        h('button', { 'data-path': d.mount || '', title: `${d.full || d.name} · ${fmtBytes(d.size)}`,
           onclick: async () => { try { go(await TyDrives.mount(d)); } catch (e) { fail(e); } } },
           `${d.name} (${fmtBytes(d.size)})`),
         d.removable ? h('button', { class: 'fm-eject', title: 'Güvenle çıkar', html: svgIcon('eject'),
@@ -316,7 +316,9 @@ BUILTIN.monitor.launch = () => {
       const procs = await API.get('/api/procs');
       tbody.replaceChildren(...procs.slice(0, 40).map(p => h('tr', {},
         h('td', {}, p.name), h('td', {}, p.pid), h('td', {}, p.user), h('td', {}, p.cpu.toFixed(1)), h('td', {}, fmtBytes(p.rss)),
-        h('td', {}, h('button', { class: 'btn danger', style: { height: '24px', fontSize: '12px' }, onclick: () => API.post('/api/kill', { pid: p.pid }).then(() => notify('Durduruldu', p.name)).catch(fail) }, 'Durdur')))));
+        h('td', {}, p.protected
+          ? h('span', { class: 'mon-sys', title: 'TyrOS\'un çalışması için gerekli; durdurulamaz' }, 'Sistem')
+          : h('button', { class: 'btn danger', style: { height: '24px', fontSize: '12px' }, onclick: () => API.post('/api/kill', { pid: p.pid }).then(() => notify('Durduruldu', p.name)).catch(fail) }, 'Durdur')))));
     } catch (e) { /* bir sonraki turda yeniden dener */ }
   }
   tick();
