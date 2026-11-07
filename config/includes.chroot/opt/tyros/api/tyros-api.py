@@ -400,24 +400,55 @@ def r_exec(q, body):
 
 
 # ---------------------------------------------------------------- süreçler
+# Sistemi ve TyrOS arayüzünü ayakta tutan süreçler: Sistem İzleyici'den durdurulamaz
+SYSTEM_PROCS = {"Xorg", "X", "openbox", "lightdm", "systemd", "dbus-daemon", "dbus-broker", "pipewire",
+                "pipewire-pulse", "wireplumber", "ttyd", "apache2", "NetworkManager", "earlyoom",
+                "tyros-session", "polkitd", "udisksd", "bluetoothd", "wpa_supplicant", "Xwayland"}
+SESSION_PROCS = {"chromium", "chrome", "python3", "bash", "sh", "sleep", "xdotool", "curl", "tyros-session", "ttyd"}
+ME = pwd.getpwuid(os.getuid()).pw_name
+
+
+def is_protected(pid, user, sid, name):
+    if pid in (1, os.getpid()) or user != ME or name in SYSTEM_PROCS or name.startswith("systemd"):
+        return True
+    try:
+        my_sid = os.getsid(0)
+    except OSError:
+        my_sid = -1
+    # TyrOS oturumunun kendi parçaları (arayüz penceresi, köprü, terminal)
+    return sid == my_sid and name in SESSION_PROCS
+
+
 def r_procs(q, body):
-    code, out, _ = run(["ps", "-eo", "pid,user,%cpu,%mem,rss,comm", "--sort=-%cpu", "--no-headers"])
+    code, out, _ = run(["ps", "-eo", "pid,sid,user:32,%cpu,%mem,rss,comm", "--sort=-%cpu", "--no-headers"])
     procs = []
     for line in out.splitlines()[:80]:
-        parts = line.split(None, 5)
-        if len(parts) == 6:
-            procs.append({"pid": int(parts[0]), "user": parts[1], "cpu": float(parts[2]),
-                          "mem": float(parts[3]), "rss": int(parts[4]) * 1024, "name": parts[5]})
+        parts = line.split(None, 6)
+        if len(parts) == 7:
+            pid, sid = int(parts[0]), int(parts[1])
+            procs.append({"pid": pid, "user": parts[2], "cpu": float(parts[3]),
+                          "mem": float(parts[4]), "rss": int(parts[5]) * 1024, "name": parts[6],
+                          "protected": is_protected(pid, parts[2], sid, parts[6])})
     return procs
 
 
 def r_kill(q, body):
+    pid = int(body.get("pid"))
+    for p in r_procs(q, None):
+        if p["pid"] == pid and p["protected"]:
+            raise ApiError("Bu bir sistem parçası; TyrOS'un çalışması için gerekli olduğu için durdurulamaz.", 403)
     try:
-        os.kill(int(body.get("pid")), signal.SIGTERM)
-    except PermissionError:
-        raise ApiError("Bu süreci durdurma iznin yok", 403)
+        os.getsid(pid)
     except ProcessLookupError:
-        raise ApiError("Süreç artık çalışmıyor", 404)
+        raise ApiError("Bu program zaten kapanmış.", 404)
+    if is_protected(pid, ME, os.getsid(pid), read(f"/proc/{pid}/comm").strip()):
+        raise ApiError("Bu bir sistem parçası; TyrOS'un çalışması için gerekli olduğu için durdurulamaz.", 403)
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except PermissionError:
+        raise ApiError("Bu programı durdurma iznin yok.", 403)
+    except ProcessLookupError:
+        raise ApiError("Bu program zaten kapanmış.", 404)
     return {"ok": True}
 
 
