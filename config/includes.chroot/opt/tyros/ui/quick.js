@@ -53,6 +53,17 @@ const Display = {
 };
 
 /* ---------------------------------------------------------------- sürücüler (USB / diskler) */
+// Bazı araçlar yoldaki boşluk ve Türkçe harfleri \x20 / \040 gibi kaçışlarla yazar: gerçek yola çevir
+function unesc(p) {
+  if (!p || !/\\(x[0-9a-fA-F]{2}|[0-7]{3})/.test(p)) return p;
+  const bytes = [];
+  for (let i = 0; i < p.length; i++) {
+    const m = /^\\(?:x([0-9a-fA-F]{2})|([0-7]{3}))/.exec(p.slice(i));
+    if (m) { bytes.push(m[1] ? parseInt(m[1], 16) : parseInt(m[2], 8)); i += m[0].length - 1; }
+    else for (const b of new TextEncoder().encode(p[i])) bytes.push(b);
+  }
+  return new TextDecoder().decode(new Uint8Array(bytes));
+}
 const HIDE_FS = new Set(['', 'swap', 'squashfs', 'LVM2_member', 'crypto_LUKS', 'linux_raid_member']);
 const HIDE_PARTTYPE = /EFI System|BIOS boot|Microsoft reserved|Windows recovery|Linux swap/i;
 const Drives = {
@@ -70,7 +81,7 @@ const Drives = {
       if (d.type === 'disk' && devs.some(x => x.pkname === d.name)) continue;    // bölümleri olan disk
       const fs = d.fstype || '';
       if (HIDE_FS.has(fs) || HIDE_PARTTYPE.test(d.parttypename || '')) continue;
-      const mp = d.mountpoint || '';
+      const mp = unesc(d.mountpoint) || '';
       if (mp === '/' || mp === '[SWAP]' || mp.startsWith('/boot') || mp.startsWith('/run/live') || mp.startsWith('/lib/live')) continue;
       if (/^(loop|zram|sr|ram)/.test(d.name)) continue;
       const parent = byName[d.pkname] || d;
@@ -90,22 +101,33 @@ const Drives = {
   async open(dr) { BUILTIN.files.launch(await this.mount(dr)); },
   // "Mounted /dev/sdb1 at /media/tyros/USB" ya da "already mounted at `/media/...'" çıktısından yolu al
   mountPath(t) { const m = /\bat\s+[`']?(\/[^`'\n]+?)[`']?\.?\s*$/m.exec(t || ''); return m ? m[1] : null; },
+  // Sürücünün gerçek bağlama yolunu lsblk'ten oku (JSON: boşluklu/Türkçe adlar bozulmaz)
+  async mountedAt(dev) {
+    try {
+      const j = JSON.parse(await out(`lsblk -J -o MOUNTPOINT ${sh(dev)} 2>/dev/null`, 10) || '{}');
+      const mp = unesc((j.blockdevices || [])[0]?.mountpoint);
+      return mp && mp.startsWith('/') && mp !== '[SWAP]' ? mp : null;
+    } catch { return null; }
+  },
   async mount(dr) {
-    if (dr.mount) return dr.mount;
-    const r = await ex(`udisksctl mount -b ${sh(dr.path)} --no-user-interaction 2>&1`, 40);
-    let mp = this.mountPath(r.stdout);
+    // Önceden bilinen yol hâlâ geçerli mi?
+    let mp = await this.mountedAt(dr.path);
     if (!mp) {
-      // udisks izin vermedi ya da açamadı: TyrOS'un kendi yardımcısıyla dene
-      const r2 = await ex(`sudo -n /usr/local/sbin/tyros-mount mount ${sh(dr.path)} 2>&1`, 60);
-      mp = this.mountPath(r2.stdout);
-      if (!mp) throw new Error((r2.stdout || r.stdout || 'Sürücü açılamadı').trim());
+      const r = await ex(`LC_ALL=C udisksctl mount -b ${sh(dr.path)} --no-user-interaction 2>&1`, 40);
+      mp = await this.mountedAt(dr.path);
+      if (!mp) {
+        // udisks izin vermedi ya da açamadı: TyrOS'un kendi yardımcısıyla dene
+        const r2 = await ex(`sudo -n /usr/local/sbin/tyros-mount mount ${sh(dr.path)} 2>&1`, 60);
+        mp = await this.mountedAt(dr.path);
+        if (!mp) throw new Error((r2.stdout || r.stdout || 'Sürücü açılamadı').trim());
+      }
     }
     dr.mount = mp;
     return mp;
   },
   async eject(dr) {
     if (dr.mount) {
-      const r = await ex(`udisksctl unmount -b ${sh(dr.path)} --no-user-interaction 2>&1`, 40);
+      const r = await ex(`LC_ALL=C udisksctl unmount -b ${sh(dr.path)} --no-user-interaction 2>&1`, 40);
       if (r.code !== 0) {
         if (/busy|meşgul/i.test(r.stdout || '')) throw new Error('target is busy');
         const r2 = await ex(`sudo -n /usr/local/sbin/tyros-mount unmount ${sh(dr.path)} 2>&1`, 40);
@@ -113,7 +135,7 @@ const Drives = {
       }
       dr.mount = '';
     }
-    if (dr.removable) await ex(`udisksctl power-off -b ${sh(dr.parent)} --no-user-interaction 2>&1`, 30);
+    if (dr.removable) await ex(`LC_ALL=C udisksctl power-off -b ${sh(dr.parent)} --no-user-interaction 2>&1`, 30);
     notify('Güvenle çıkarılabilir', `${dr.name} artık çıkarılabilir.`);
     Drives.changed();
   },
