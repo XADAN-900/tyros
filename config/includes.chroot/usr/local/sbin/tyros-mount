@@ -11,7 +11,7 @@ esac
 UID_=$(id -u "$U"); GID_=$(id -g "$U")
 case "$ACTION" in
   mount)
-    CUR=$(findmnt -nro TARGET --source "$DEV" 2>/dev/null | head -n1)
+    CUR=$(findmnt -nl -o TARGET --source "$DEV" 2>/dev/null | head -n1)
     if [ -n "$CUR" ]; then echo "Mounted $DEV at $CUR"; exit 0; fi
     FS=$(blkid -o value -s TYPE "$DEV" 2>/dev/null)
     LABEL=$(blkid -o value -s LABEL "$DEV" 2>/dev/null | tr -cd '[:alnum:] ._-')
@@ -37,7 +37,7 @@ case "$ACTION" in
     if mountpoint -q "$MP"; then echo "Mounted $DEV at $MP"; exit 0; fi
     rmdir "$MP" 2>/dev/null; echo "Sürücü açılamadı" >&2; exit 5 ;;
   unmount)
-    MP=$(findmnt -nro TARGET --source "$DEV" 2>/dev/null | head -n1)
+    MP=$(findmnt -nl -o TARGET --source "$DEV" 2>/dev/null | head -n1)
     [ -n "$MP" ] || exit 0
     case "$MP" in /media/*) ;; *) echo "Bu sürücü sistem tarafından kullanılıyor" >&2; exit 3 ;; esac
     sync
