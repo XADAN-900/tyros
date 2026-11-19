@@ -165,15 +165,18 @@ const Shell = {
 
   async refreshTray() {
     try {
-      const [s, v] = await Promise.all([API.get('/api/sysinfo'), API.get('/api/volume').catch(() => ({}))]);
-      $('#trayNet').innerHTML = svgIcon(s.ip ? 'wifi' : 'nonet');
-      $('#trayNet').title = s.ip ? `Bağlı: ${s.ip}` : 'Ağ bağlantısı yok';
+      const [s, v, n] = await Promise.all([API.get('/api/sysinfo'), API.get('/api/volume').catch(() => ({})),
+        API.get('/api/netstate').catch(() => ({}))]);
+      // Ağ durumu NetworkManager'dan; o yoksa IP adresine bak
+      const wifiOk = n.wifi === 'connected', online = n.available ? (n.wired || wifiOk) : !!s.ip;
+      $('#trayNet').innerHTML = svgIcon(n.wired ? 'wired' : online ? 'wifi' : 'nonet');
+      $('#trayNet').title = n.wired ? 'Kablolu bağlantı' : wifiOk ? `Wi-Fi: ${n.ssid}` : n.wifi === 'connecting' ? 'Wi-Fi bağlanıyor…' : online ? `Bağlı: ${s.ip}` : 'Ağ bağlantısı yok';
       $('#trayVol').innerHTML = v.available ? svgIcon(v.muted ? 'mute' : 'vol') : '';
       if (s.battery) {
         const p = s.battery.percent;
         $('#trayBat').innerHTML = `<svg viewBox="0 0 24 24"><rect x="2.5" y="7" width="17" height="10" rx="2"/><path d="M21.5 10.5v3"/><rect x="4.5" y="9" width="${(13 * p / 100).toFixed(1)}" height="6" rx="1" fill="currentColor" stroke="none"/></svg><span>%${p}</span>`;
       }
-      this.netText = s.ip ? `Bağlı · IP ${s.ip}` : 'Ağ bağlantısı yok. Ayarlar > Ağ bölümünden bağlan.';
+      this.netText = online ? `Bağlı${wifiOk ? ' · ' + n.ssid : ''}${s.ip ? ' · IP ' + s.ip : ''}` : 'Ağ bağlantısı yok. Ayarlar > Ağ bölümünden bağlan.';
       this.vol = v;
     } catch { $('#trayNet').innerHTML = svgIcon('nonet'); }
   },
