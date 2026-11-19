@@ -8,6 +8,9 @@
   <meta name="color-scheme" content="dark">
   <style>html, body { background: #0b1220; }</style>
   <link rel="icon" href="img/logo.png">
+  <!-- Arayüz dili: sistem Türkçe değilse yazılar çevrilir -->
+  <script src="i18n-en.js"></script>
+  <script src="i18n.js"></script>
   <link rel="stylesheet" href="tyros.css">
   <link rel="stylesheet" href="brand.css">
 </head>
@@ -41,7 +44,7 @@
         <button data-power="lock" title="Ekranı kilitle (Super+L)">Kilitle</button>
         <button data-power="logout" title="Oturumu kapat">Oturumu kapat</button>
         <button data-power="reboot" title="Yeniden başlat">Yeniden başlat</button>
-        <button data-power="shutdown" class="danger" title="Bilgisayarı kapat">Kapat</button>
+        <button data-power="shutdown" class="danger" title="Bilgisayarı kapat" data-i18n-ctx="power">Kapat</button>
       </div>
     </aside>
     <div class="sm-main">

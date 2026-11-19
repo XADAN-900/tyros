@@ -179,7 +179,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Kapat / yeniden başlat / oturumu kapat
   const POWER = {
-    shutdown: { title: 'Bilgisayar kapatılsın mı?', msg: 'Açık uygulamalar kapanacak.', ok: 'Kapat', screen: 'Kapatılıyor…',
+    shutdown: { title: 'Bilgisayar kapatılsın mı?', msg: 'Açık uygulamalar kapanacak.', ok: 'Bilgisayarı kapat', screen: 'Kapatılıyor…',
       cmd: 'systemctl poweroff -i || sudo -n systemctl poweroff' },
     reboot: { title: 'Yeniden başlatılsın mı?', msg: 'Açık uygulamalar kapanacak.', ok: 'Yeniden başlat', screen: 'Yeniden başlatılıyor…',
       cmd: 'systemctl reboot -i || sudo -n systemctl reboot' },
@@ -299,7 +299,7 @@ mkdir -p "$(dirname "$dest")" && mv -- ${TRASH}/files/${q(item.name)} "$dest" &&
   },
 };
 function refreshFileWindows() {
-  $$('.win .fm button[title="Yenile"]').forEach(b => b.click());
+  $$('.win .fm button[title="Yenile"], .win .fm button[title="Refresh"]').forEach(b => b.click());
 }
 const trashApp = () => ({ id: 'trash', name: 'Çöp', glyph: Trash.count ? 'trashfull' : 'trash', tile: '#3a4250', builtin: true });
 
@@ -338,7 +338,7 @@ BUILTIN.trash = {
         return;
       }
       list.replaceChildren(...items.map(it => {
-        const when = it.date ? new Date(it.date).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+        const when = it.date ? new Date(it.date).toLocaleString(UI_LOCALE, { dateStyle: 'medium', timeStyle: 'short' }) : '';
         const row = h('div', { class: 'tr-row' },
           appIcon({ glyph: it.dir ? 'folder' : 'file', tile: it.dir ? '#34586c' : '#3a424d' }),
           h('div', { class: 'tr-info' }, h('div', { class: 'tr-name' }, it.name),
@@ -387,7 +387,7 @@ API.post = function (path, body) {
 let DESKTOP_DIR = null, desktopSig = '';
 async function desktopFiles() {
   try {
-    if (!DESKTOP_DIR) DESKTOP_DIR = ((await API.get('/api/places')).find(p => p.name === 'Masaüstü') || {}).path || null;
+    if (!DESKTOP_DIR) DESKTOP_DIR = ((await API.get('/api/places')).find(p => p.key === 'DESKTOP' || p.name === 'Masaüstü') || {}).path || null;
     if (!DESKTOP_DIR) return [];
     return (await API.get('/api/files?path=' + encodeURIComponent(DESKTOP_DIR))).items.filter(i => !i.name.startsWith('.') && !i.name.endsWith('.desktop'));
   } catch { return []; }

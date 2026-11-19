@@ -399,7 +399,7 @@ BUILTIN.settings.launch = (section = 'look') => {
   }
 
   /* ---------------------------------------------------------------- Klavye */
-  function keyboard() {
+  async function keyboard() {
     const LAYOUTS = [['tr', 'Türkçe Q'], ['tr:f', 'Türkçe F'], ['us', 'İngilizce (ABD)'], ['gb', 'İngilizce (Birleşik Krallık)'],
       ['de', 'Almanca'], ['fr', 'Fransızca'], ['es', 'İspanyolca'], ['ru', 'Rusça'], ['az', 'Azerbaycanca'], ['ara', 'Arapça']];
     body.append(group('Klavye düzeni',
@@ -407,13 +407,27 @@ BUILTIN.settings.launch = (section = 'look') => {
         run(`setxkbmap ${v.split(':').map(q).join(' -variant ')}`).then(() => { Settings.set({ kbLayout: v }); notify('Klavye düzeni değişti', LAYOUTS.find(l => l[0] === v)[1]); }).catch(fail);
       }), 'Hemen uygulanır ve her açılışta hatırlanır'),
       row('Dene', h('input', { class: 'field', placeholder: 'Buraya yazarak deneyebilirsin…', style: { width: '260px' } }))));
-    body.append(group('Dil', row('Sistem dili', h('span', {}, 'Türkçe'), 'Uygulamalar Türkçe açılır')));
+    // Sistem dili (programların dili) kurulumda seçilir; TyrOS arayüzünün dili buradan değiştirilebilir
+    const L = await API.get('/api/lang').catch(() => ({}));
+    const code = (L.system || '').split('.')[0].replace('_', '-');
+    let name = code || '—';
+    try { name = new Intl.DisplayNames([UI_LOCALE], { type: 'language' }).of(code) || name; } catch { /* bilinmeyen kod */ }
+    const langSel = select([['auto', 'Sistem diliyle aynı'], ['tr', 'Türkçe'], ['en', 'English']], L.pref || 'auto', async v => {
+      if (!(await tyrosConfirm('Açık pencereler kapanır ve masaüstü yeniden yüklenir.', { title: 'Arayüz dili değişsin mi?', ok: 'Değiştir' }))) { show('keyboard'); return; }
+      await Settings.set({ uiLang: v });
+      location.reload();
+    });
+    // Dil adları her zaman kendi dilinde yazılsın
+    langSel.querySelectorAll('option[value="tr"], option[value="en"]').forEach(o => o.setAttribute('data-notr', ''));
+    body.append(group('Dil',
+      row('Sistem dili', h('span', {}, name), 'Programlar bu dilde açılır. Değiştirmek için TyrOS\'u o dilde kur.'),
+      row('Arayüz dili', langSel)));
   }
 
   /* ---------------------------------------------------------------- Tarih ve saat */
   async function time() {
     const now = h('b', { class: 'st-clock' });
-    const tick = () => { now.textContent = new Date().toLocaleString('tr-TR', { dateStyle: 'full', timeStyle: 'medium' }); };
+    const tick = () => { now.textContent = new Date().toLocaleString(UI_LOCALE, { dateStyle: 'full', timeStyle: 'medium' }); };
     tick(); timer = setInterval(tick, 1000);
     const info = await tryRun('timedatectl show -p Timezone -p NTP --value 2>/dev/null');
     const [tz = 'Europe/Istanbul', ntp = 'yes'] = info.trim().split('\n');
@@ -479,7 +493,7 @@ BUILTIN.settings.launch = (section = 'look') => {
       const pk = out.split('\n').filter(l => l.includes('/')).map(l => l.split('/')[0]);
       box.replaceChildren();
       if (!pk.length && !Settings.data.lastUpdateCheck) { box.append(h('div', { class: 'muted st-pad' }, 'Güncellemeleri görmek için "Güncellemeleri denetle"ye bas (internet gerekir).')); return; }
-      if (!pk.length) { box.append(h('div', { class: 'st-pad' }, h('b', {}, 'Sistem güncel. '), h('span', { class: 'muted' }, `Yüklenecek güncelleme yok · son denetim ${new Date(Settings.data.lastUpdateCheck).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}`))); return; }
+      if (!pk.length) { box.append(h('div', { class: 'st-pad' }, h('b', {}, 'Sistem güncel. '), h('span', { class: 'muted' }, `Yüklenecek güncelleme yok · son denetim ${new Date(Settings.data.lastUpdateCheck).toLocaleString(UI_LOCALE, { dateStyle: 'medium', timeStyle: 'short' })}`))); return; }
       box.append(h('div', { class: 'st-row' },
         h('div', { class: 'st-label' }, h('div', {}, `${pk.length} güncelleme hazır`), h('div', { class: 'muted st-hint st-clip', title: pk.join(', ') }, pk.slice(0, 8).join(', ') + (pk.length > 8 ? '…' : ''))),
         h('div', { class: 'st-ctl' }, h('button', { class: 'btn primary', onclick: install }, 'Hepsini güncelle'))));
