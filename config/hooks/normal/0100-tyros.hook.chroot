@@ -45,7 +45,7 @@ s = re.sub(r"(<theme>\s*<name>)[^<]*(</name>)", r"\1Clearlooks\2", s, count=1)
 # Klavyedeki ses / parlaklık tuşları ve ekran görüntüsü (Print Screen)
 keys = [("XF86AudioRaiseVolume", "vol-up"), ("XF86AudioLowerVolume", "vol-down"), ("XF86AudioMute", "mute"),
         ("XF86MonBrightnessUp", "bright-up"), ("XF86MonBrightnessDown", "bright-down"),
-        ("Print", "shot"), ("A-Print", "shot-window"), ("S-Print", "shot-area")]
+        ("Print", "shot"), ("A-Print", "shot-window"), ("S-Print", "shot-area"), ("W-l", "lock")]
 binds = "".join(f'\n  <keybind key="{k}"><action name="Execute"><command>/usr/local/bin/tyros-key {a}</command></action></keybind>'
                 for k, a in keys if f'key="{k}"' not in s)
 s = s.replace("</keyboard>", binds + "\n</keyboard>", 1)
@@ -84,6 +84,36 @@ for p in firmware-marvell-prestera firmware-nvidia-tesla-535-gsp firmware-netron
          firmware-cavium firmware-myricom firmware-netxen dahdi-firmware-nonfree pocketsphinx-en-us; do
   if dpkg -s "$p" >/dev/null 2>&1; then dpkg -r "$p" >/dev/null 2>&1 || echo "Not: $p kaldırılamadı, yerinde bırakıldı"; fi
 done
+# --- TyrOS ile ilgisi olmayan, menüyü kalabalıklaştıran parçalar ---
+# KDE Sistem Ayarları (kurulum aracının yanında gelen), GNOME yardım uygulaması (≈130 MB),
+# Openbox ayar aracı (TyrOS düzenini bozabilir), Kylin masaüstünün yetki aracı (lxpolkit yerine geçti)
+# Güvenlik: bir paket yalnızca tek başına kaldırılabiliyorsa (başka hiçbir paketi götürmüyorsa) kaldırılır
+for p in systemsettings yelp obconf ukui-polkit; do
+  if dpkg -s "$p" >/dev/null 2>&1; then
+    n=$(apt-get -s purge "$p" 2>/dev/null | grep -c '^Purg' || true)
+    if [ "$n" = "1" ]; then apt-get purge -y "$p" || echo "Not: $p kaldırılamadı"
+    else echo "Not: $p başka paketlere bağlı, yerinde bırakıldı"; fi
+  fi
+done
+apt-get autoremove --purge -y || true
+# Türkçe yazım denetimi (LibreOffice / Firefox) — depoda yoksa derleme durmasın
+apt-get install -y --no-install-recommends hunspell-tr 2>/dev/null || echo "Not: hunspell-tr bulunamadı"
+# Arka plan araçları ve ayar pencereleri menüde görünmesin (TyrOS'ta karşılıkları var)
+for f in htop vim lxterminal thunar thunar-settings thunar-bulk-rename thunar-volman-settings \
+         org.xfce.mousepad-settings chromium kdesystemsettings obconf nm-connection-editor synaptic \
+         debian-xterm debian-uxterm xterm uxterm; do
+  d=/usr/share/applications/$f.desktop
+  if [ -f "$d" ] && ! grep -q '^NoDisplay=true' "$d"; then sed -i '/^\[Desktop Entry\]/a NoDisplay=true' "$d"; fi
+done
+# Güvenlik duvarı: dışarıdan gelen bağlantıları engelle, giden serbest (Ayarlar > Ağ'dan kapatılabilir)
+if [ -f /etc/ufw/ufw.conf ]; then
+  sed -i 's/^DEFAULT_INPUT_POLICY=.*/DEFAULT_INPUT_POLICY="DROP"/; s/^DEFAULT_OUTPUT_POLICY=.*/DEFAULT_OUTPUT_POLICY="ACCEPT"/' /etc/default/ufw
+  sed -i 's/^ENABLED=.*/ENABLED=yes/' /etc/ufw/ufw.conf
+  systemctl enable ufw 2>/dev/null || true
+fi
+# Saat eşitleme ve yazıcı servisi
+systemctl enable systemd-timesyncd cups 2>/dev/null || true
+
 # Belgeler (lisans dosyaları kalır), Türkçe/İngilizce dışındaki çeviriler
 find /usr/share/doc -mindepth 1 ! -type d ! -name copyright -delete 2>/dev/null || true
 find /usr/share/doc -mindepth 1 -type d -empty -delete 2>/dev/null || true
