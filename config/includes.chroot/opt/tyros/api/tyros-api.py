@@ -369,11 +369,11 @@ def r_places(q, body):
         m = re.match(r'XDG_(\w+)_DIR="(.*)"', line.strip())
         if m and m.group(1) in labels:
             found[m.group(1)] = m.group(2).replace("$HOME", HOME)
-    places = [{"name": "Ev", "path": HOME, "icon": "home"}]
+    places = [{"name": "Ev", "path": HOME, "icon": "home", "key": "HOME"}]
     for key, label in labels.items():
         p = found.get(key) or os.path.join(HOME, {"DOWNLOAD": "Downloads"}.get(key, key.capitalize()))
         if os.path.isdir(p) and p != HOME:
-            places.append({"name": label, "path": p, "icon": "folder"})
+            places.append({"name": label, "path": p, "icon": "folder", "key": key})
     places += [{"name": "Çöp", "path": os.path.join(HOME, ".local/share/Trash/files"), "icon": "trash"},
                {"name": "Sistem kökü", "path": "/", "icon": "folder"}]
     return places
@@ -845,12 +845,32 @@ def r_events(q, body):
     return [l.split("|", 1) for l in lines if "|" in l][-20:]
 
 
+def system_lang():
+    """Sistem dili (ör. tr_TR.UTF-8). Oturum ortamından; yoksa /etc/default/locale."""
+    for k in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        v = os.environ.get(k, "")
+        if v and v not in ("C", "POSIX", "C.UTF-8"):
+            return v
+    m = re.search(r'^LANG="?([^"\n]+)', read("/etc/default/locale"), re.M)
+    return m.group(1) if m else "en_US.UTF-8"
+
+
+def r_lang(q, body):
+    """Arayüz dili: Ayarlar'da seçilen, yoksa sistem dili. Çevirisi olmayan diller İngilizce gösterilir."""
+    pref = (json.loads(read(SETTINGS_FILE, "{}") or "{}").get("uiLang") or "auto")
+    sysl = system_lang()
+    code = sysl.split(".")[0].split("_")[0].lower()
+    ui = pref if pref in ("tr", "en") else ("tr" if code == "tr" else "en")
+    return {"ui": ui, "pref": pref, "system": sysl, "code": code}
+
+
 def r_ping(q, body):
     return {"ok": True, "name": "TyrOS", "version": "1.0", "term": have("ttyd")}
 
 
 ROUTES = {
     ("GET", "/api/ping"): r_ping,
+    ("GET", "/api/lang"): r_lang,
     ("GET", "/api/blockgen"): r_blockgen,
     ("GET", "/api/events"): r_events,
     ("GET", "/api/sysinfo"): r_sysinfo,
