@@ -171,7 +171,12 @@ if [ -f /etc/default/zramswap ]; then
 fi
 mkdir -p /etc/systemd/journald.conf.d /etc/sysctl.d
 printf '[Journal]\nSystemMaxUse=50M\nRuntimeMaxUse=30M\n' > /etc/systemd/journald.conf.d/tyros.conf
-printf 'vm.swappiness=100\nvm.vfs_cache_pressure=50\n' > /etc/sysctl.d/90-tyros.conf
+# zram için önerilen ayarlar: takastan tek tek sayfa oku (sıkıştırılmış bellekte toplu okuma gereksiz),
+# bellek sıkışınca ani takılma yerine erken ve küçük adımlarla yer aç
+printf 'vm.swappiness=100\nvm.vfs_cache_pressure=50\nvm.page-cluster=0\nvm.watermark_boost_factor=0\nvm.watermark_scale_factor=125\n' > /etc/sysctl.d/90-tyros.conf
+# Yazıcı simgesi: TyrOS'ta sistem tepsisi olmadığı için görünmüyor ama arka planda ~30 MB bellek tutuyordu.
+# Yazdırma etkilenmez (Ayarlar > Yazıcılar ve uygulamaların yazdır penceresi aynen çalışır).
+rm -f /etc/xdg/autostart/print-applet.desktop
 
 # --- Donanıma göre servisler: donanım yoksa servis hiç çalışmaz, takılınca kendiliğinden başlar ---
 # Modem servisi: yalnızca 3G/4G modem (ya da USB seri modem) varsa
