@@ -196,14 +196,30 @@ window.TyDrives = Drives;
 window.TyDisplay = Display;
 
 // Takılan USB'leri yakala: yeni sürücü gelince bağla ve haber ver
+/* Sistem değişiklikleri (ağ, Wi-Fi, Bluetooth, uçak modu, yeni kurulan uygulama) anında arayüze yansısın.
+   API her değişiklikte imzayı değiştirir; arayüz saniyede bir bu ucuz imzaya bakar. */
+const TyLive = {
+  t: null,
+  net() {
+    clearTimeout(this.t);
+    this.t = setTimeout(() => {
+      Shell.refreshTray?.();
+      if (!$('#quickPanel').hidden) QP.state().then(() => QP.renderTiles()).catch(() => {});
+      window.dispatchEvent(new Event('tyros-net'));
+    }, 250);
+  },
+};
+window.TyLive = TyLive;
 async function watchDrives() {
-  let known = null, sig = null, pending = 1;
+  let known = null, sig = null, pending = 1, netSig = null, appSig = null;
   const tick = async () => {
     // Ucuz imza kontrolü: bir şey takılıp çıkarılmadıkça ayrıntılı tarama yapma.
     // Değişince birkaç tur daha tara (yeni takılan USB'nin dosya sistemi birkaç saniyede tanınır).
     try {
-      const g = (await API.get('/api/blockgen')).sig;
-      if (g !== sig) { sig = g; pending = 3; }
+      const r = await API.get('/api/blockgen');
+      if (r.sig !== sig) { sig = r.sig; pending = 3; }
+      if (r.net !== undefined && r.net !== netSig) { if (netSig !== null) TyLive.net(); netSig = r.net; }
+      if (r.apps !== undefined && r.apps !== appSig) { if (appSig !== null) Shell.loadApps(true); appSig = r.apps; }
     } catch { pending = Math.max(pending, 1); }
     if (pending <= 0) return;
     pending--;
@@ -227,7 +243,7 @@ async function watchDrives() {
   let busy = false;
   const safeTick = async () => { if (busy) return; busy = true; try { await tick(); } catch { /* sonraki tur */ } busy = false; };
   await safeTick();
-  setInterval(safeTick, 2000);
+  setInterval(safeTick, 1000);
 }
 
 /* ---------------------------------------------------------------- kısayol tuşu olayları + ekran göstergesi */
@@ -273,24 +289,25 @@ async function checkBattery() {
 const QP = {
   st: {},
   async state() {
-    const t = await out(`
-      echo "wifi=$(timeout 3 nmcli radio wifi 2>/dev/null)"
-      echo "wifidev=$(timeout 3 nmcli -t -f DEVICE,TYPE dev 2>/dev/null | awk -F: '$2=="wifi"{print $1; exit}')"
-      echo "ssid=$(timeout 3 nmcli -t -f ACTIVE,SSID dev wifi list --rescan no 2>/dev/null | awk -F: '$1=="yes"{print $2; exit}')"
-      echo "wired=$(timeout 3 nmcli -t -f TYPE,STATE dev 2>/dev/null | grep -c '^ethernet:connected')"
+    // Ağ durumu API'den (dil ayarından bağımsız); diğerleri tek kabuk komutuyla, İngilizce çıktıyla
+    const [t, n] = await Promise.all([out(`
+      export LC_ALL=C.UTF-8
       echo "bt=$(timeout 2 bluetoothctl show 2>/dev/null | awk '/Powered:/{print $2; exit}')"
       echo "rf=$(rfkill -n -o SOFT 2>/dev/null | sort -u | tr '\\n' ' ')"
       echo "hot=$(timeout 3 nmcli -t -f NAME con show --active 2>/dev/null | grep -cx TyrOS-Hotspot)"
       echo "osk=$(pgrep -u "$(id -u)" -x onboard >/dev/null && echo 1)"
       echo "oskok=$(command -v onboard >/dev/null && echo 1)"
-    `, 15);
+    `, 15), API.get('/api/netstate').catch(() => ({}))]);
     const s = {};
     for (const line of t.split('\n')) { const i = line.indexOf('='); if (i > 0) s[line.slice(0, i)] = line.slice(i + 1).trim(); }
-    s.wifiOn = s.wifi === 'enabled';
+    s.wifidev = n.wifidev || '';
+    s.wifiOn = !!n.wifiOn;
+    s.wifiBusy = n.wifi === 'connecting';
+    s.ssid = n.wifi === 'connected' ? (n.ssid || 'Bağlı') : '';
     s.btFound = s.bt === 'yes' || s.bt === 'no';
     s.btOn = s.bt === 'yes';
     s.plane = s.rf ? s.rf.trim() === 'blocked' : !!Settings.data.airplane;
-    s.wiredOn = Number(s.wired) > 0;
+    s.wiredOn = !!n.wired;
     s.hotOn = Number(s.hot) > 0;
     s.osk = s.osk === '1'; s.oskOk = s.oskok === '1';
     return (this.st = s);
@@ -345,7 +362,7 @@ const QP = {
     const tiles = [];
     if (s.wifidev) {
       tiles.push(this.tile({ icon: 'wifi', label: 'Wi-Fi', on: s.wifiOn && !s.plane,
-        sub: !s.wifiOn ? 'Kapalı' : s.ssid || (s.wiredOn ? 'Kablolu bağlı' : 'Bağlı değil'),
+        sub: !s.wifiOn ? 'Kapalı' : s.wifiBusy ? 'Bağlanıyor…' : s.ssid || (s.wiredOn ? 'Kablolu bağlı' : 'Bağlı değil'),
         onToggle: () => busy(() => ex(`nmcli radio wifi ${s.wifiOn ? 'off' : 'on'}`)), onMore: () => settings('net') }));
     } else {
       tiles.push(this.tile({ icon: s.wiredOn ? 'wired' : 'nonet', label: s.wiredOn ? 'Ethernet' : 'Ağ', on: s.wiredOn,
@@ -373,7 +390,7 @@ const QP = {
       onToggle: () => busy(async () => {
         if (s.hotOn) { await ex('nmcli connection down TyrOS-Hotspot'); return; }
         const pass = 'tyros' + Math.random().toString().slice(2, 8);
-        const r = await ex(`nmcli device wifi hotspot ifname ${sh(s.wifidev)} con-name TyrOS-Hotspot ssid TyrOS password ${pass} 2>&1`, 30);
+        const r = await ex(`LC_ALL=C.UTF-8 nmcli device wifi hotspot ifname ${sh(s.wifidev)} con-name TyrOS-Hotspot ssid TyrOS password ${pass} 2>&1`, 30);
         if (r.code !== 0) throw new Error('Wi-Fi kartın etkin noktayı desteklemiyor olabilir.');
         notify('Etkin nokta açık', `Ağ adı: TyrOS · Şifre: ${pass}`, false, 15000);
       }) }));

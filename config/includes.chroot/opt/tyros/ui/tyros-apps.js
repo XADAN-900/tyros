@@ -76,6 +76,13 @@ const _apply = Settings.apply.bind(Settings);
 Settings.apply = function () { _apply(); Prefs.apply(); };
 /* Teknik hata yazılarını herkesin anlayacağı Türkçe açıklamalara çevir */
 const FRIENDLY_ERRORS = [
+  // Wi-Fi (ağ aracı İngilizce çıktıyla çalışır; bunlar genel "internet yok" mesajından önce gelmeli)
+  [/Secrets were required|802-11-wireless-security|invalid.*key|password.*(wrong|incorrect)/i,
+    'Wi-Fi şifresi yanlış. Tekrar dene.'],
+  [/No network with SSID|wifi-ap-not-found/i,
+    'Bu kablosuz ağ artık görünmüyor. Ağı yeniden tara.'],
+  [/Connection activation failed|Activation failed|IP configuration could not be reserved|base network connection was interrupted/i,
+    'Wi-Fi ağına bağlanılamadı. Sinyal zayıf olabilir; modeme yaklaşıp tekrar dene.'],
   [/Temporary failure resolving|Could not resolve|Failed to fetch|Network is unreachable|Unable to connect|Connection timed out|No route to host|Çözülemedi|getirilemedi|ağa ulaşılamıyor|Bağlanılamadı|bağlanılamıyor/i,
     'İnternet bağlantısı yok. Bir ağa bağlanıp tekrar dene.'],
   [/Unable to locate package|has no installation candidate|bulunamadı.*paket|paket.*bulunamadı/i,
@@ -158,12 +165,17 @@ BUILTIN.settings.launch = (section = 'look') => {
   const win = existing || WM.open({ app: BUILTIN.settings, width: 940, height: 620, content: root, single: true });
   if (existing) { WM.focus(existing.id); return; }
   let timer = null;
-  win.onClose = () => { clearInterval(timer); return true; };
+  // Açık sayfanın canlı yenilenmesi (ör. Wi-Fi bağlanınca/kopunca liste kendiliğinden güncellenir)
+  let liveRefresh = null;
+  const onNet = () => liveRefresh?.();
+  window.addEventListener('tyros-net', onNet);
+  win.onClose = () => { clearInterval(timer); window.removeEventListener('tyros-net', onNet); return true; };
   for (const [key, label, icon] of SECTIONS) side.append(h('button', { 'data-k': key, html: svgIcon(icon) + `<span>${esc(label)}</span>`, onclick: () => show(key) }));
   show(section);
 
   function show(key) {
     clearInterval(timer);
+    liveRefresh = null;
     const s = SECTIONS.find(x => x[0] === key) || SECTIONS[0];
     $$('button', side).forEach(b => b.classList.toggle('on', b.dataset.k === s[0]));
     body.replaceChildren(h('h2', {}, s[1]));
@@ -244,28 +256,76 @@ BUILTIN.settings.launch = (section = 'look') => {
   /* ---------------------------------------------------------------- Ağ */
   async function net() {
     const box = h('div', { class: 'st-card' }, h('div', { class: 'muted st-pad' }, 'Ağlar taranıyor…'));
-    body.append(h('div', { class: 'st-group' }, h('div', { class: 'st-gtitle st-gtitle-row' }, 'Kablosuz ağlar',
-      h('button', { class: 'btn', html: svgIcon('refresh') + 'Yeniden tara', onclick: () => show('net') })), box));
-    try {
-      const r = await API.get('/api/wifi?rescan=1');
-      box.innerHTML = '';
-      if (!r.available) { box.append(h('div', { class: 'muted st-pad' }, 'NetworkManager bulunamadı.')); return; }
-      if (r.wired) box.append(row('Kablolu bağlantı', h('span', { style: { color: 'var(--ok)' } }, 'Bağlı')));
-      if (!r.networks.length) box.append(h('div', { class: 'muted st-pad' }, 'Kablosuz ağ bulunamadı.'));
-      for (const n of r.networks) {
-        box.append(h('div', { class: 'st-row' },
-          h('div', { class: 'st-label st-net' }, h('span', { class: 'ico', html: svgIcon('wifi') }),
-            h('div', {}, h('div', {}, n.ssid), h('div', { class: 'muted st-hint' }, `${n.secure ? 'Şifreli' : 'Açık ağ'} · sinyal %${n.signal}`))),
-          h('div', { class: 'st-ctl' }, n.active ? h('span', { style: { color: 'var(--ok)' } }, 'Bağlı')
-            : h('button', { class: 'btn', onclick: async () => {
-              const password = n.secure ? await askText(win, `"${n.ssid}" ağının şifresi`, '', 'Bağlan') : '';
-              if (n.secure && !password) return;
-              notify('Bağlanılıyor', n.ssid);
-              try { await API.post('/api/wifi', { ssid: n.ssid, password }); notify('Bağlandı', n.ssid); show('net'); } catch (e) { fail(e); }
-            } }, 'Bağlan'))));
+    const ipVal = h('span', {}, '…');
+    const head = h('div', { class: 'st-gtitle st-gtitle-row' }, 'Kablosuz ağlar',
+      h('button', { class: 'btn', html: svgIcon('refresh') + 'Yeniden tara', onclick: () => fill(true) }));
+    body.append(h('div', { class: 'st-group' }, head, box));
+    let filling = false, again = false, connecting = '';
+    const connect = async (n, btn) => {
+      let password = '';
+      if (n.secure && !n.saved) {
+        password = await askText(win, `"${n.ssid}" ağının şifresi`, '', 'Bağlan');
+        if (!password) return;
       }
-      const ip = (await API.get('/api/sysinfo')).ip;
-      body.append(group('Bağlantı bilgisi', row('IP adresi', h('span', {}, ip || 'Bağlı değil')),
+      connecting = n.ssid;
+      btn.disabled = true; btn.textContent = 'Bağlanıyor…';
+      try {
+        let r = await API.post('/api/wifi', { ssid: n.ssid, password, secure: n.secure });
+        if (r.needPassword) {
+          // Kayıtlı şifre artık geçmiyor (ör. modem şifresi değişti): yenisini sor
+          password = await askText(win, `"${n.ssid}" ağının şifresi değişmiş olabilir. Yeni şifreyi yaz`, '', 'Bağlan');
+          if (!password) { connecting = ''; return fill(false); }
+          r = await API.post('/api/wifi', { ssid: n.ssid, password, secure: n.secure });
+        }
+        notify('Wi-Fi bağlandı', n.ssid);
+      } catch (e) { fail(e); }
+      connecting = '';
+      fill(false);
+      window.TyLive?.net();
+    };
+    const fill = async (rescan) => {
+      if (!box.isConnected) return;
+      if (filling) { again = true; return; }
+      filling = true;
+      try {
+        const r = await API.get('/api/wifi' + (rescan ? '?rescan=1' : ''));
+        const rows = [];
+        if (!r.available) rows.push(h('div', { class: 'muted st-pad' }, 'NetworkManager bulunamadı.'));
+        else {
+          if (r.wired) rows.push(row('Kablolu bağlantı', h('span', { style: { color: 'var(--ok)' } }, 'Bağlı')));
+          if (!r.wifidev) rows.push(h('div', { class: 'muted st-pad' }, 'Bu bilgisayarda Wi-Fi kartı bulunamadı.'));
+          else if (!r.wifiOn) rows.push(row('Wi-Fi kapalı', h('button', { class: 'btn primary', onclick: async () => {
+            await tryRun('LC_ALL=C.UTF-8 nmcli radio wifi on'); setTimeout(() => fill(true), 1500); } }, 'Wi-Fi\'ı aç')));
+          else if (!r.networks.length) rows.push(h('div', { class: 'muted st-pad' }, 'Kablosuz ağ bulunamadı. Biraz bekleyip "Yeniden tara"ya bas.'));
+          for (const n of (r.wifiOn ? r.networks : [])) {
+            const busy = n.connecting || connecting === n.ssid;
+            const btn = h('button', { class: 'btn' }, busy ? 'Bağlanıyor…' : 'Bağlan');
+            btn.disabled = busy;
+            btn.addEventListener('click', () => connect(n, btn));
+            rows.push(h('div', { class: 'st-row' },
+              h('div', { class: 'st-label st-net' }, h('span', { class: 'ico', html: svgIcon('wifi') }),
+                h('div', {}, h('div', {}, n.ssid), h('div', { class: 'muted st-hint' },
+                  `${n.active ? 'Bağlı · ' : n.saved ? 'Kayıtlı · ' : ''}${n.secure ? 'Şifreli' : 'Açık ağ'} · sinyal %${n.signal}`))),
+              h('div', { class: 'st-ctl' }, n.active
+                ? h('div', { class: 'st-inline' }, h('span', { style: { color: 'var(--ok)' } }, 'Bağlı'),
+                    h('button', { class: 'btn', onclick: async e => {
+                      e.currentTarget.disabled = true;
+                      try { await API.post('/api/wifi', { action: 'disconnect' }); } catch (er) { fail(er); }
+                      fill(false); window.TyLive?.net();
+                    } }, 'Bağlantıyı kes'))
+                : btn)));
+          }
+        }
+        if (box.isConnected) box.replaceChildren(...rows);
+        ipVal.textContent = r.ip || 'Bağlı değil';
+      } catch (e) { if (box.isConnected) box.replaceChildren(h('div', { class: 'muted st-pad' }, friendlyError(e.message))); }
+      filling = false;
+      if (again) { again = false; fill(false); }
+    };
+    liveRefresh = () => fill(false);
+    try {
+      await fill(true);
+      body.append(group('Bağlantı bilgisi', row('IP adresi', ipVal),
         row('Gelişmiş ağ ayarları', h('button', { class: 'btn', onclick: () => tryRun('nohup nm-connection-editor >/dev/null 2>&1 &') }, 'Aç'), 'VPN, sabit IP, DNS gibi ayarlar')));
       const fw = await tryRun('sudo -n /usr/local/sbin/tyros-pkg firewall-status 2>/dev/null');
       if (fw.trim()) body.append(group('Güvenlik',
