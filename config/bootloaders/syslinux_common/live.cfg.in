@@ -1,12 +1,12 @@
 label live-@FLAVOUR@
-	menu label ^TyrOS'u baslat
+	menu label ^Start TyrOS
 	menu default
 	linux @LINUX@
 	initrd @INITRD@
 	append @APPEND_LIVE@
 
 label live-@FLAVOUR@-failsafe
-	menu label TyrOS (^guvenli mod)
+	menu label TyrOS (^safe mode)
 	linux @LINUX@
 	initrd @INITRD@
 	append @APPEND_LIVE_FAILSAFE@
