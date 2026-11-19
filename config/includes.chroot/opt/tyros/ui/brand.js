@@ -187,6 +187,7 @@ window.addEventListener('DOMContentLoaded', () => {
       cmd: 'setsid -f /usr/local/bin/tyros-logout >/dev/null 2>&1' },
   };
   Shell.power = async function (action) {
+    if (action === 'lock') { this.closePopups(); API.post('/api/exec', { cmd: 'dm-tool lock >/dev/null 2>&1 &' }).catch(fail); return; }
     const p = POWER[action];
     if (!p) return;
     this.closePopups();

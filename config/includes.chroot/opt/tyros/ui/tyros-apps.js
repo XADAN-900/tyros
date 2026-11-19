@@ -41,8 +41,35 @@ const Prefs = {
     const blank = Number(d.blankMinutes ?? 0) * 60;
     tryRun(blank ? `xset s ${blank} ${blank}; xset +dpms; xset dpms ${blank} ${blank} ${blank}` : 'xset s off; xset -dpms');
     if (d.brightness && d.brightness !== 1 && d.output) tryRun(`xrandr --output ${q(d.output)} --brightness ${Number(d.brightness)}`);
+    if (d.mouse) tryRun(mouseCmd(d.mouse));
   },
 };
+/* Fare / dokunmatik yüzey ayarları (libinput, xinput ile) */
+const XI = (prop, val) => `for id in $(xinput list --id-only 2>/dev/null); do xinput list-props $id 2>/dev/null | grep -q '${prop} (' && xinput set-prop $id '${prop}' ${val}; done`;
+function mouseCmd(m) {
+  const c = [];
+  if (m.tap != null) c.push(XI('libinput Tapping Enabled', m.tap ? 1 : 0));
+  if (m.natural != null) c.push(XI('libinput Natural Scrolling Enabled', m.natural ? 1 : 0));
+  if (m.left != null) c.push(XI('libinput Left Handed Enabled', m.left ? 1 : 0));
+  if (m.speed != null) c.push(XI('libinput Accel Speed', Number(m.speed).toFixed(2)));
+  return c.join('; ') + '; true';
+}
+// Arka planda uzun süren işler (güncelleme vb.): çıktıyı dosyaya yazar, bitince sonucu döndürür
+async function bgJob(cmd) {
+  const id = Date.now().toString(36), log = `/tmp/tyros-job-${id}.log`, rc = `/tmp/tyros-job-${id}.rc`;
+  await run(`(${cmd} >${log} 2>&1; echo $? >${rc}) >/dev/null 2>&1 &`);
+  return new Promise(res => {
+    const t = setInterval(async () => {
+      const o = (await tryRun(`cat ${rc} 2>/dev/null`)).trim();
+      if (o === '') return;
+      clearInterval(t);
+      const out = await tryRun(`tail -n 80 ${log} 2>/dev/null`);
+      tryRun(`rm -f ${log} ${rc}`);
+      res({ code: Number(o), out });
+    }, 1500);
+  });
+}
+const hasNet = async () => (await tryRun('timeout 6 getent hosts deb.debian.org >/dev/null 2>&1 && echo ok', 10)).includes('ok');
 const _load = Settings.load.bind(Settings);
 Settings.load = async function () { await _load(); Prefs.apply(); Prefs.applySystem(); };
 const _apply = Settings.apply.bind(Settings);
@@ -117,11 +144,12 @@ notify = function (title, text = '', isErr = false, ms) {
 /* ================================================================ AYARLAR */
 BUILTIN.settings.launch = (section = 'look') => {
   const SECTIONS = [
-    ['net', 'Ağ ve internet', 'wifi', net], ['bluetooth', 'Bluetooth', 'bt', bluetooth],
-    ['display', 'Ekran', 'monitor', display], ['sound', 'Ses', 'vol', sound], ['look', 'Kişiselleştirme', 'image', look],
+    ['net', 'Ağ ve internet', 'wifi', net], ['bluetooth', 'Bluetooth', 'bt', bluetooth], ['printers', 'Yazıcılar', 'print', printers],
+    ['display', 'Ekran', 'monitor', display], ['sound', 'Ses', 'vol', sound], ['mouse', 'Fare ve dokunmatik yüzey', 'mouse', mouse],
+    ['look', 'Kişiselleştirme', 'image', look],
     ['notify', 'Bildirimler', 'bell', notifications], ['power', 'Güç ve pil', 'power', power], ['storage', 'Depolama ve sürücüler', 'disk', storage],
     ['keyboard', 'Klavye ve dil', 'editor', keyboard], ['time', 'Tarih ve saat', 'info', time],
-    ['apps', 'Varsayılan uygulamalar', 'store', defaults], ['system', 'Sistem hakkında', 'home', system],
+    ['apps', 'Varsayılan uygulamalar', 'store', defaults], ['updates', 'Güncellemeler', 'refresh', updates], ['system', 'Sistem hakkında', 'home', system],
   ];
   const side = h('nav', { class: 'st-side' });
   const body = h('div', { class: 'st-body' });
@@ -239,6 +267,12 @@ BUILTIN.settings.launch = (section = 'look') => {
       const ip = (await API.get('/api/sysinfo')).ip;
       body.append(group('Bağlantı bilgisi', row('IP adresi', h('span', {}, ip || 'Bağlı değil')),
         row('Gelişmiş ağ ayarları', h('button', { class: 'btn', onclick: () => tryRun('nohup nm-connection-editor >/dev/null 2>&1 &') }, 'Aç'), 'VPN, sabit IP, DNS gibi ayarlar')));
+      const fw = await tryRun('sudo -n /usr/local/sbin/tyros-pkg firewall-status 2>/dev/null');
+      if (fw.trim()) body.append(group('Güvenlik',
+        row('Güvenlik duvarı', toggle(/:\s*active/i.test(fw), async v => {
+          const r = await bgJob(`sudo -n /usr/local/sbin/tyros-pkg firewall-${v ? 'on' : 'off'}`);
+          if (r.code === 0) notify(v ? 'Güvenlik duvarı açıldı' : 'Güvenlik duvarı kapatıldı'); else fail(new Error(r.out));
+        }), 'Dışarıdan bilgisayarına gelen izinsiz bağlantıları engeller. Açık kalması önerilir.')));
     } catch (e) { box.innerHTML = ''; box.append(h('div', { class: 'muted st-pad' }, e.message)); }
   }
 
@@ -330,6 +364,86 @@ BUILTIN.settings.launch = (section = 'look') => {
         row('Saat dilimi', zones.length ? select(zones.map(z => [z, z.replace(/_/g, ' ')]), tz,
           z => run(priv(`timedatectl set-timezone ${q(z)}`)).then(() => notify('Saat dilimi değişti', z)).catch(fail)) : h('span', {}, tz)),
         row('Saati internetten otomatik al', toggle(ntp === 'yes', v => run(priv(`timedatectl set-ntp ${v ? 'true' : 'false'}`)).catch(fail)))));
+  }
+
+  /* ---------------------------------------------------------------- Yazıcılar */
+  async function printers() {
+    const box = h('div', { class: 'st-card' }, h('div', { class: 'muted st-pad' }, 'Yazıcılar aranıyor…'));
+    body.append(h('div', { class: 'st-group' }, h('div', { class: 'st-gtitle st-gtitle-row' }, 'Yazıcılar',
+      h('button', { class: 'btn primary', html: svgIcon('plus') + 'Yazıcı ekle', onclick: () => tryRun('nohup system-config-printer >/dev/null 2>&1 &') })), box),
+      group('İpucu', h('div', { class: 'muted st-pad' }, 'USB ile takılan ve aynı ağdaki yazıcıların çoğu kendiliğinden bulunur. Bulunmazsa "Yazıcı ekle"ye bas.')));
+    const sched = await tryRun('LC_ALL=C lpstat -r 2>&1');
+    if (!/is running/.test(sched)) { box.replaceChildren(h('div', { class: 'muted st-pad' }, 'Yazdırma servisi çalışmıyor. Bilgisayarı yeniden başlatmayı dene.')); return; }
+    const list = (await tryRun('LC_ALL=C lpstat -e 2>/dev/null')).trim().split('\n').filter(Boolean);
+    const def = ((await tryRun('LC_ALL=C lpstat -d 2>/dev/null')).match(/destination:\s*(\S+)/) || [])[1];
+    box.replaceChildren();
+    if (!list.length) { box.append(h('div', { class: 'muted st-pad' }, 'Bağlı yazıcı bulunamadı. Yazıcını açıp USB ya da ağ ile bağla, sonra bu sayfayı yeniden aç.')); return; }
+    for (const p of list) {
+      const act = (cmd, ok) => run(cmd).then(() => { notify(ok, p.replace(/_/g, ' ')); show('printers'); }).catch(fail);
+      box.append(h('div', { class: 'st-row' },
+        h('div', { class: 'st-label st-net' }, h('span', { class: 'ico', html: svgIcon('print') }),
+          h('div', { class: 'st-clip' }, h('div', { class: 'st-clip' }, p.replace(/_/g, ' ')), h('div', { class: 'muted st-hint' }, p === def ? 'Varsayılan yazıcı' : 'Hazır'))),
+        h('div', { class: 'st-ctl st-inline' },
+          p === def ? null : h('button', { class: 'btn', onclick: () => act(`lpoptions -d ${q(p)} >/dev/null`, 'Varsayılan yazıcı ayarlandı') }, 'Varsayılan yap'),
+          h('button', { class: 'btn', onclick: () => act(`lp -d ${q(p)} /usr/share/cups/data/testprint >/dev/null`, 'Deneme sayfası gönderildi') }, 'Deneme sayfası'))));
+    }
+  }
+
+  /* ---------------------------------------------------------------- Fare ve dokunmatik yüzey */
+  async function mouse() {
+    const m = Object.assign({ tap: true, natural: false, left: false, speed: 0 }, Settings.data.mouse || {});
+    const save = patch => { Object.assign(m, patch); Settings.set({ mouse: { ...m } }); tryRun(mouseCmd(patch)); };
+    const props = await tryRun("for id in $(xinput list --id-only 2>/dev/null); do xinput list-props $id 2>/dev/null; done | grep -o 'libinput [A-Za-z ]* Enabled (' | sort -u");
+    const hasTouchpad = /Tapping Enabled/.test(props);
+    const speed = h('input', { type: 'range', min: -1, max: 1, step: .1, value: m.speed, class: 'st-range' });
+    speed.addEventListener('change', () => save({ speed: Number(speed.value) }));
+    body.append(group('Fare',
+      row('İşaretçi hızı', speed, 'Sola yavaş, sağa hızlı'),
+      row('Sol el kullanımı', toggle(m.left, v => save({ left: v })), 'Sağ ve sol tuşların yerini değiştirir'),
+      row('Doğal kaydırma', toggle(m.natural, v => save({ natural: v })), 'Telefondaki gibi: içerik parmağın yönünde kayar')));
+    if (hasTouchpad) body.append(group('Dokunmatik yüzey',
+      row('Dokunarak tıklama', toggle(m.tap, v => save({ tap: v })), 'Dokunmatik yüzeye hafifçe dokunmak tıklama sayılır')));
+    else body.append(group('Dokunmatik yüzey', h('div', { class: 'muted st-pad' }, 'Bu bilgisayarda dokunmatik yüzey bulunamadı.')));
+  }
+
+  /* ---------------------------------------------------------------- Güncellemeler */
+  async function updates() {
+    const live = (await tryRun('test -d /run/live/medium && echo live')).includes('live');
+    const box = h('div', { class: 'st-card' });
+    const checkBtn = h('button', { class: 'btn', html: svgIcon('refresh') + 'Güncellemeleri denetle' });
+    body.append(h('div', { class: 'st-group' }, h('div', { class: 'st-gtitle st-gtitle-row' }, 'Sistem güncellemeleri', checkBtn), box));
+    if (live) body.append(group(null, h('div', { class: 'muted st-pad' }, 'Şu an USB\'den canlı çalışıyorsun: yapılan güncellemeler bilgisayar kapanınca kaybolur. Kalıcı olması için TyrOS\'u diske kur.')));
+    const busy = text => box.replaceChildren(h('div', { class: 'st-row' }, h('div', { class: 'sto-spin' }), h('div', { class: 'st-label' }, text)));
+    async function list() {
+      const out = await tryRun('LC_ALL=C apt list --upgradable 2>/dev/null | tail -n +2');
+      const pk = out.split('\n').filter(l => l.includes('/')).map(l => l.split('/')[0]);
+      box.replaceChildren();
+      if (!pk.length && !Settings.data.lastUpdateCheck) { box.append(h('div', { class: 'muted st-pad' }, 'Güncellemeleri görmek için "Güncellemeleri denetle"ye bas (internet gerekir).')); return; }
+      if (!pk.length) { box.append(h('div', { class: 'st-pad' }, h('b', {}, 'Sistem güncel. '), h('span', { class: 'muted' }, `Yüklenecek güncelleme yok · son denetim ${new Date(Settings.data.lastUpdateCheck).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}`))); return; }
+      box.append(h('div', { class: 'st-row' },
+        h('div', { class: 'st-label' }, h('div', {}, `${pk.length} güncelleme hazır`), h('div', { class: 'muted st-hint st-clip', title: pk.join(', ') }, pk.slice(0, 8).join(', ') + (pk.length > 8 ? '…' : ''))),
+        h('div', { class: 'st-ctl' }, h('button', { class: 'btn primary', onclick: install }, 'Hepsini güncelle'))));
+    }
+    async function check() {
+      if (!(await hasNet())) { notify('İnternet bağlantısı yok', 'Güncellemeleri denetlemek için bir ağa bağlan.', true); return list(); }
+      checkBtn.disabled = true; busy('Güncellemeler denetleniyor…');
+      const r = await bgJob('sudo -n /usr/local/sbin/tyros-pkg update');
+      checkBtn.disabled = false;
+      if (r.code !== 0) fail(new Error(r.out));
+      Settings.set({ lastUpdateCheck: Date.now() });
+      list();
+    }
+    async function install() {
+      if (!(await hasNet())) { notify('İnternet bağlantısı yok', 'Güncellemeleri indirmek için bir ağa bağlan.', true); return; }
+      checkBtn.disabled = true; busy('Güncellemeler yükleniyor… Bu birkaç dakika sürebilir, bilgisayarı kapatma.');
+      const r = await bgJob('sudo -n /usr/local/sbin/tyros-pkg upgrade');
+      checkBtn.disabled = false;
+      if (r.code === 0) notify('Güncellemeler yüklendi', 'Bazı değişiklikler yeniden başlatınca geçerli olur.'); else fail(new Error(r.out));
+      list();
+    }
+    checkBtn.addEventListener('click', check);
+    busy('Okunuyor…');
+    list();
   }
 
   /* ---------------------------------------------------------------- Güç */

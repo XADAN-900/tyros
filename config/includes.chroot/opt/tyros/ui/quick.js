@@ -20,6 +20,9 @@ Object.assign(ICONS, {
   eject: '<path d="M12 5l7 8H5z"/><path d="M5 18h14"/>',
   usb: '<path d="M12 21V5"/><path d="M9 7l3-4 3 4"/><path d="M12 15l-5-3V9"/><path d="M12 13l5-3V8"/><rect x="5.5" y="7.5" width="3" height="2"/><circle cx="17" cy="7" r="1.3"/><circle cx="12" cy="20" r="1.6"/>',
   disk: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="16.5" cy="12" r="1.2"/><path d="M6.5 12h5"/>',
+  print: '<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/>',
+  mouse: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   hotspot: '<circle cx="12" cy="12" r="1.8"/><path d="M8.5 15.5a5 5 0 0 1 0-7M15.5 8.5a5 5 0 0 1 0 7M5.6 18.4a9 9 0 0 1 0-12.8M18.4 5.6a9 9 0 0 1 0 12.8"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/>',
 });
@@ -261,6 +264,7 @@ const QP = {
     this.batt = h('span', { class: 'qp-batt' });
     this.user = h('span', { class: 'qp-user' });
     const powerMenu = h('div', { class: 'qp-powermenu', hidden: true },
+      h('button', { onclick: () => Shell.power('lock') }, 'Kilitle'),
       h('button', { onclick: () => Shell.power('logout') }, 'Oturumu kapat'),
       h('button', { onclick: () => Shell.power('reboot') }, 'Yeniden başlat'),
       h('button', { class: 'danger', onclick: () => Shell.power('shutdown') }, 'Bilgisayarı kapat'));
