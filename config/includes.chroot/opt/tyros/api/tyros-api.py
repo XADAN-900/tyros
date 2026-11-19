@@ -29,6 +29,16 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 HOME = os.path.expanduser("~")
+# Giriş ekranının (LightDM) verdiği PATH'te /usr/games yok: oyunlar menüde görünmüyor ve açılmıyordu.
+# Uygulamaların bulunabileceği tüm klasörleri ekle.
+_path = [d for d in os.environ.get("PATH", "").split(":") if d]
+for _d in ("/usr/local/bin", "/usr/bin", "/bin", "/usr/local/sbin", "/usr/sbin", "/sbin",
+           "/usr/local/games", "/usr/games", os.path.join(HOME, ".local/bin"), "/var/lib/flatpak/exports/bin"):
+    if _d not in _path:
+        _path.append(_d)
+os.environ["PATH"] = ":".join(_path)
+# Ağ aracı (nmcli) Türkçe ortamda "yes/connected" yerine "evet/bağlandı" yazıyor; okunacak çıktılar hep İngilizce alınsın
+C_ENV = dict(os.environ, LC_ALL="C.UTF-8", LANG="C.UTF-8", LANGUAGE="")
 CONFIG_DIR = os.path.join(HOME, ".config", "tyros")
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings.json")
 PKG_RE = re.compile(r"^[a-z0-9][a-z0-9+.\-]{0,100}$")
@@ -50,10 +60,10 @@ def read(path, default=""):
         return default
 
 
-def run(cmd, timeout=10):
+def run(cmd, timeout=10, env=None):
     """Komutu çalıştır, (kod, stdout, stderr) döndür. cmd liste olmalı."""
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
         return p.returncode, p.stdout, p.stderr
     except FileNotFoundError:
         return 127, "", f"{cmd[0]}: bulunamadı"
@@ -532,31 +542,181 @@ def r_volume(q, body):
     return {"available": True, "level": float(m.group(1)) if m else 0, "muted": "MUTED" in out}
 
 
+def nm(args, timeout=10):
+    """nmcli'yi dilden bağımsız (İngilizce) çıktıyla çalıştır."""
+    return run(["nmcli"] + args, timeout=timeout, env=C_ENV)
+
+
+def nm_split(line):
+    """nmcli -t satırını böl: '\\:' kaçışlı iki nokta alanın parçasıdır."""
+    out, cur, i = [], "", 0
+    while i < len(line):
+        c = line[i]
+        if c == "\\" and i + 1 < len(line):
+            cur += line[i + 1]; i += 2; continue
+        if c == ":":
+            out.append(cur); cur = ""
+        else:
+            cur += c
+        i += 1
+    out.append(cur)
+    return out
+
+
+# Ağ değişikliklerini anında yakala: "nmcli monitor" her olayda bir satır yazar
+_net_gen = [0]
+
+
+def _net_watch():
+    while have("nmcli"):
+        try:
+            p = subprocess.Popen(["nmcli", "monitor"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                 stdin=subprocess.DEVNULL, text=True, env=C_ENV)
+            for _ in p.stdout:
+                _net_gen[0] += 1
+            p.wait()
+        except Exception:
+            pass
+        time.sleep(3)
+
+
+def net_sig():
+    """Ağ / Wi-Fi / Bluetooth / uçak modu değişikliği imzası (alt süreç başlatmadan)."""
+    parts = [str(_net_gen[0])]
+    try:
+        for n in sorted(os.listdir("/sys/class/net")):
+            parts.append(n + read(f"/sys/class/net/{n}/operstate").strip())
+    except OSError:
+        pass
+    try:
+        for n in sorted(os.listdir("/sys/class/rfkill")):
+            parts.append(n + read(f"/sys/class/rfkill/{n}/soft").strip() + read(f"/sys/class/rfkill/{n}/hard").strip())
+    except OSError:
+        pass
+    try:
+        parts += sorted(os.listdir("/sys/class/bluetooth"))
+    except OSError:
+        pass
+    parts.append(read("/proc/net/route"))
+    return str(hash("|".join(parts)))
+
+
+def apps_sig():
+    """Uygulama kurulunca/kaldırılınca menü kendiliğinden yenilensin."""
+    sig = []
+    for d in APP_DIRS:
+        try:
+            sig.append(str(os.stat(d).st_mtime_ns))
+        except OSError:
+            sig.append("-")
+    return "|".join(sig)
+
+
+def wifi_profiles():
+    """Kayıtlı Wi-Fi bağlantılarının adları."""
+    code, out, _ = nm(["-t", "-f", "NAME,TYPE", "connection", "show"], 8)
+    return {p[0] for p in map(nm_split, out.splitlines()) if len(p) >= 2 and p[1] == "802-11-wireless"}
+
+
+def net_state():
+    st = {"available": have("nmcli"), "wifidev": "", "wifiOn": False, "wifi": "none", "ssid": "",
+          "wired": False, "ip": ""}
+    code, ips, _ = run(["hostname", "-I"], 5)
+    st["ip"] = ips.split()[0] if code == 0 and ips.split() else ""
+    if not st["available"]:
+        return st
+    code, out, _ = nm(["radio", "wifi"], 5)
+    st["wifiOn"] = out.strip() == "enabled"
+    conn = ""
+    code, out, _ = nm(["-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device"], 5)
+    for p in map(nm_split, out.splitlines()):
+        if len(p) < 4:
+            continue
+        dev, typ, state, con = p[:4]
+        if typ == "wifi" and not st["wifidev"]:
+            st["wifidev"] = dev
+            st["wifi"] = ("connected" if state.startswith("connected") else
+                          "connecting" if state.startswith(("connecting", "deactivating")) else
+                          "off" if state in ("unavailable", "unmanaged") else "disconnected")
+            conn = "" if con == "--" else con
+        elif typ == "ethernet" and state.startswith("connected"):
+            st["wired"] = True
+    if st["wifi"] in ("connected", "connecting") and st["wifidev"]:
+        code, out, _ = nm(["-t", "-f", "IN-USE,SSID", "device", "wifi", "list", "ifname", st["wifidev"],
+                           "--rescan", "no"], 5)
+        for p in map(nm_split, out.splitlines()):
+            if len(p) >= 2 and p[0] == "*" and p[1]:
+                st["ssid"] = p[1]
+                break
+        st["ssid"] = st["ssid"] or conn
+    return st
+
+
+def r_netstate(q, body):
+    return net_state()
+
+
 def r_wifi(q, body):
     if not have("nmcli"):
         return {"available": False, "networks": []}
-    run(["nmcli", "dev", "wifi", "rescan"], timeout=5) if "rescan" in q else None
-    code, out, _ = run(["nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "dev", "wifi", "list"], timeout=15)
-    nets, seen = [], set()
-    for line in out.splitlines():
-        parts = re.split(r"(?<!\\):", line)
-        if len(parts) < 4 or not parts[1] or parts[1] in seen:
+    if "rescan" in q:
+        nm(["device", "wifi", "rescan"], 6)
+    st = net_state()
+    code, out, _ = nm(["-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "device", "wifi", "list", "--rescan", "no"], 15)
+    saved = wifi_profiles()
+    nets = {}
+    for p in map(nm_split, out.splitlines()):
+        if len(p) < 4 or not p[1]:
             continue
-        seen.add(parts[1])
-        nets.append({"active": parts[0] == "*", "ssid": parts[1].replace("\\:", ":"),
-                     "signal": int(parts[2] or 0), "secure": bool(parts[3] and parts[3] != "--")})
-    code2, conn, _ = run(["nmcli", "-t", "-f", "TYPE,STATE,CONNECTION", "dev"])
-    wired = any(l.startswith("ethernet:connected") for l in conn.splitlines())
-    return {"available": True, "wired": wired, "networks": nets}
+        ssid = p[1]
+        n = nets.setdefault(ssid, {"ssid": ssid, "active": False, "signal": 0, "secure": False, "saved": ssid in saved})
+        # Aynı ağın birden çok vericisi olabilir (2.4/5 GHz, mesh): biri bağlıysa ağ bağlıdır
+        n["active"] = n["active"] or p[0] == "*"
+        n["signal"] = max(n["signal"], int(p[2]) if p[2].isdigit() else 0)
+        n["secure"] = n["secure"] or bool(p[3] and p[3] != "--")
+    cur = st["ssid"] if st["wifi"] in ("connected", "connecting") else ""
+    if cur:
+        n = nets.setdefault(cur, {"ssid": cur, "active": False, "signal": 0, "secure": True, "saved": True})
+        n["active"] = st["wifi"] == "connected"
+        n["connecting"] = st["wifi"] == "connecting"
+    lst = sorted(nets.values(), key=lambda n: (not n["active"], not n.get("connecting"), -n["signal"]))
+    return {"available": True, "wired": st["wired"], "wifiOn": st["wifiOn"], "wifidev": st["wifidev"],
+            "ip": st["ip"], "networks": lst}
 
 
 def r_wifi_connect(q, body):
-    argv = ["nmcli", "dev", "wifi", "connect", body.get("ssid", "")]
-    if body.get("password"):
-        argv += ["password", body["password"]]
-    code, out, err = run(argv, timeout=40)
+    if not have("nmcli"):
+        raise ApiError("NetworkManager bulunamadı")
+    if body.get("action") == "disconnect":
+        dev = net_state()["wifidev"]
+        if dev:
+            nm(["device", "disconnect", dev], 20)
+        return {"ok": True}
+    ssid = body.get("ssid", "")
+    if not ssid:
+        raise ApiError("Ağ adı boş")
+    pw = body.get("password") or ""
+    saved = ssid in wifi_profiles()
+    if not pw and saved:
+        # Daha önce bağlanılmış ağ: kayıtlı şifreyle bağlan
+        code, out, err = nm(["connection", "up", "id", ssid], 45)
+        if code == 0:
+            return {"ok": True}
+        if body.get("secure"):
+            return {"ok": False, "needPassword": True}
+        raise ApiError((err or out).strip() or "Wi-Fi ağına katılınamadı")
+    if pw and saved:
+        # Yeni şifre girildi: eski (hatalı olabilecek) kaydı sil, yoksa nmcli eski kaydı kullanmaya çalışır
+        nm(["connection", "delete", "id", ssid], 15)
+    argv = ["device", "wifi", "connect", ssid]
+    if pw:
+        argv += ["password", pw]
+    code, out, err = nm(argv, 45)
     if code != 0:
-        raise ApiError((err or out).strip() or "Bağlanılamadı")
+        # Yarım kalan kaydı temizle ki bir sonraki denemede doğru şifre çalışsın
+        if ssid in wifi_profiles():
+            nm(["connection", "delete", "id", ssid], 15)
+        raise ApiError((err or out).strip() or "Wi-Fi ağına katılınamadı")
     return {"ok": True}
 
 
@@ -666,7 +826,7 @@ def r_blockgen(q, body):
             pass
     mounts = "".join(l.split(" ", 2)[0] + l.split(" ", 2)[1] for l in read("/proc/mounts").splitlines()
                      if l.startswith("/dev/"))
-    return {"sig": str(hash(("|".join(devs), mounts)))}
+    return {"sig": str(hash(("|".join(devs), mounts))), "net": net_sig(), "apps": apps_sig()}
 
 
 def r_events(q, body):
@@ -710,6 +870,7 @@ ROUTES = {
     ("GET", "/api/volume"): r_volume,
     ("POST", "/api/volume"): r_volume,
     ("GET", "/api/wifi"): r_wifi,
+    ("GET", "/api/netstate"): r_netstate,
     ("POST", "/api/wifi"): r_wifi_connect,
     ("POST", "/api/power"): r_power,
     ("GET", "/api/pkg/search"): r_pkg_search,
@@ -824,6 +985,7 @@ def main():
     ARGS = ap.parse_args()
     cpu_percent()
     threading.Thread(target=find_icon, args=("x",), daemon=True).start()  # simge dizinini önceden hazırla
+    threading.Thread(target=_net_watch, daemon=True).start()              # ağ değişikliklerini anında yakala
     srv = ThreadingHTTPServer((ARGS.host, ARGS.port), Handler)
     srv.daemon_threads = True
     print(f"TyrOS API http://{ARGS.host}:{ARGS.port} adresinde çalışıyor", flush=True)
