@@ -42,6 +42,12 @@ if command -v lxpolkit >/dev/null; then
   ( lxpolkit >>"$LOG/polkit.log" 2>&1 & )
 fi
 
+# Diske kurulumda Türkçe/İngilizce dışında bir dil seçildiyse Firefox ve LibreOffice çevirilerini
+# internet varken arka planda bir kez kur (açılışı yavaşlatmasın diye biraz bekleyerek)
+if [ -x /usr/local/bin/tyros-langpack ]; then
+  ( sleep 60; nice -n 10 /usr/local/bin/tyros-langpack >>"$LOG/langpack.log" 2>&1 ) &
+fi
+
 # 1) Sistem köprüsü — çökerse kendini yeniden başlatır
 ( while true; do
     python3 /opt/tyros/api/tyros-api.py >>"$LOG/api.log" 2>&1

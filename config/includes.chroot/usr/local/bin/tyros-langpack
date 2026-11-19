@@ -1,0 +1,31 @@
+#!/bin/sh
+# TyrOS dil paketleri: diske kurulumda Türkçe/İngilizce dışında bir dil seçildiyse
+# Firefox ve LibreOffice'in o dildeki çevirilerini internet varken bir kez kurar.
+# Oturum açılınca arka planda çalışır; internet yoksa sonraki açılışta yeniden dener.
+[ -d /run/live/medium ] && exit 0                      # canlı USB oturumunda gerek yok
+L="${LC_MESSAGES:-${LANG:-}}"
+[ -n "$L" ] || L=$(sed -n 's/^LANG="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' /etc/default/locale 2>/dev/null)
+L=${L%%.*}                                             # tr_TR.UTF-8 -> tr_TR
+LANGC=$(echo "${L%%_*}" | tr 'A-Z' 'a-z')              # tr
+FULL=$(echo "$L" | tr 'A-Z_' 'a-z-')                   # pt_BR -> pt-br
+case "$FULL" in ""|c|posix|tr|tr-*|en|en-us) exit 0 ;; esac
+DONE="$HOME/.config/tyros/langpack-$FULL"
+[ -f "$DONE" ] && exit 0
+getent hosts deb.debian.org >/dev/null 2>&1 || exit 0  # internet yok: sonra
+installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
+pick() {  # pt-br yoksa pt dene
+  for n in "$1-$FULL" "$1-$LANGC"; do
+    apt-cache show "$n" >/dev/null 2>&1 && { echo "$n"; return; }
+  done
+}
+sudo -n /usr/local/sbin/tyros-pkg update >/dev/null 2>&1
+ok=1
+for pair in "firefox-esr-l10n firefox-esr" "libreoffice-l10n libreoffice-core"; do
+  set -- $pair
+  installed "$2" || continue                           # program kurulu değilse çevirisi de gerekmez
+  p=$(pick "$1"); [ -n "$p" ] || continue               # bu dil için paket yok
+  installed "$p" && continue
+  sudo -n /usr/local/sbin/tyros-pkg install "$p" >/dev/null 2>&1 || ok=0
+done
+[ "$ok" = 1 ] && { mkdir -p "$HOME/.config/tyros"; touch "$DONE"; }
+exit 0
