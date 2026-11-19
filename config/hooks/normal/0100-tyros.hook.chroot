@@ -12,7 +12,7 @@ systemctl enable apache2 NetworkManager
 
 chmod 755 /usr/local/bin/tyros-session /usr/local/bin/tyros-logout /usr/local/bin/tyros-close /usr/local/bin/tyros-install /opt/tyros/api/tyros-api.py
 chmod -R a+rX /opt/tyros
-chmod 755 /usr/local/sbin/tyros-pkg /usr/local/sbin/tyros-mount /usr/local/bin/tyros-key
+chmod 755 /usr/local/sbin/tyros-pkg /usr/local/sbin/tyros-mount /usr/local/bin/tyros-key /usr/local/bin/tyros-langpack
 chmod 755 /usr/lib/live/config/2000-tyros-nopasswd
 # Giriş ekranında "nopasswdlogin" grubundakiler şifresiz girebilsin (yalnızca canlı kullanıcı bu grupta)
 if [ -f /etc/pam.d/lightdm ] && ! grep -q nopasswdlogin /etc/pam.d/lightdm; then
@@ -147,22 +147,11 @@ fi
 # Saat eşitleme ve yazıcı servisi
 systemctl enable systemd-timesyncd cups 2>/dev/null || true
 
-# Belgeler (lisans dosyaları kalır), Türkçe/İngilizce dışındaki çeviriler
+# Belgeler (lisans dosyaları kalır). Programların tüm dil çevirileri KALIR:
+# canlı oturum İngilizce açılır, diske kurulumda hangi dil seçilirse programlar o dilde çalışır.
 find /usr/share/doc -mindepth 1 ! -type d ! -name copyright -delete 2>/dev/null || true
 find /usr/share/doc -mindepth 1 -type d -empty -delete 2>/dev/null || true
 rm -rf /usr/share/info/* /usr/share/lintian /usr/share/linda 2>/dev/null || true
-for d in /usr/share/locale/*/; do
-  case "$(basename "$d")" in tr|tr_*|en|en_*) ;; *) rm -rf "$d" ;; esac
-done
-for d in /usr/share/man/*/; do
-  case "$(basename "$d")" in man*|tr|tr_*) ;; *) rm -rf "$d" ;; esac
-done
-for d in /usr/share/help/*/; do
-  case "$(basename "$d")" in C|tr|tr_*|en|en_*) ;; *) rm -rf "$d" ;; esac
-done
-if [ -f /usr/lib/chromium/locales/en-US.pak ]; then
-  find /usr/lib/chromium/locales -name '*.pak' ! -name 'en-US.pak' ! -name 'tr.pak' -delete
-fi
 
 # --- Az kaynak, kararlı çalışma ---
 # RAM'in yarısı kadar sıkıştırılmış takas (zram): bellek dolunca donma yerine sıkıştırır
@@ -242,6 +231,6 @@ for f in /usr/share/applications/calamares-install-debian.desktop /usr/share/app
 done
 rm -f /etc/xdg/autostart/calamares-desktop-icon.desktop
 
-# Türkçe dil ortamı
-sed -i 's/^# *tr_TR.UTF-8/tr_TR.UTF-8/' /etc/locale.gen
+# Dil ortamları: canlı oturum İngilizce, Türkçe de hazır (kurulumda seçilen dil Calamares tarafından eklenir)
+sed -i -e 's/^# *tr_TR.UTF-8/tr_TR.UTF-8/' -e 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
 locale-gen
