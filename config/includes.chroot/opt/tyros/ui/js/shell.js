@@ -158,9 +158,9 @@ const Shell = {
   /* ------------------------------------------------ tepsi & saat */
   tickClock() {
     const d = new Date();
-    $('#clockTime').textContent = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-    $('#clockDate').textContent = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
-    $('#clock').title = d.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    $('#clockTime').textContent = d.toLocaleTimeString(UI_LOCALE, { hour: '2-digit', minute: '2-digit' });
+    $('#clockDate').textContent = d.toLocaleDateString(UI_LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
+    $('#clock').title = d.toLocaleDateString(UI_LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   },
 
   async refreshTray() {

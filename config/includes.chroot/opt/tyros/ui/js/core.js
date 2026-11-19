@@ -33,7 +33,8 @@ function fmtBytes(n) {
 
 function fmtDuration(sec) {
   const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
-  return [d && `${d} gün`, h && `${h} sa`, `${m} dk`].filter(Boolean).join(' ');
+  const [D, H, M] = window.UI_LANG === 'tr' || !window.UI_LANG ? ['gün', 'sa', 'dk'] : ['d', 'h', 'min'];
+  return [d && `${d} ${D}`, h && `${h} ${H}`, `${m} ${M}`].filter(Boolean).join(' ');
 }
 
 /* ------------------------------------------------------------ sistem köprüsü */

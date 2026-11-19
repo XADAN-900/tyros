@@ -172,7 +172,7 @@ BUILTIN.files.launch = async (startPath) => {
   function select(it, el) {
     $$('.fm-item.sel', list).forEach(x => x.classList.remove('sel'));
     el.classList.add('sel'); st.sel = it;
-    status.textContent = it.dir ? it.name : `${it.name} · ${fmtBytes(it.size)} · ${new Date(it.mtime * 1000).toLocaleString('tr-TR')}`;
+    status.textContent = it.dir ? it.name : `${it.name} · ${fmtBytes(it.size)} · ${new Date(it.mtime * 1000).toLocaleString(UI_LOCALE)}`;
   }
 
   const full = it => (st.path === '/' ? '' : st.path) + '/' + it.name;
