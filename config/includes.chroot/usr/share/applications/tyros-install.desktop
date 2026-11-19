@@ -1,7 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=TyrOS'u Diske Kur
-Comment=TyrOS'u bilgisayarına kalıcı olarak kur
+Name=Install TyrOS
+Name[tr]=TyrOS'u Diske Kur
+Comment=Install TyrOS permanently on this computer
+Comment[tr]=TyrOS'u bilgisayarına kalıcı olarak kur
 Exec=tyros-install
 Icon=/usr/share/tyros/logo.png
 Terminal=false
