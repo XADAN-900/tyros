@@ -98,6 +98,39 @@ done
 apt-get autoremove --purge -y || true
 # Türkçe yazım denetimi (LibreOffice / Firefox) — depoda yoksa derleme durmasın
 apt-get install -y --no-install-recommends hunspell-tr 2>/dev/null || echo "Not: hunspell-tr bulunamadı"
+# Android telefon/tablet dosyalarına erişim (MTP) ve dokunmatik ekranlar için ekran klavyesi
+apt-get install -y --no-install-recommends jmtpfs 2>/dev/null || echo "Not: jmtpfs kurulamadı"
+apt-get install -y --no-install-recommends onboard 2>/dev/null || echo "Not: onboard kurulamadı"
+for f in onboard onboard-settings; do
+  d=/usr/share/applications/$f.desktop
+  if [ -f "$d" ] && ! grep -q '^NoDisplay=true' "$d"; then sed -i '/^\[Desktop Entry\]/a NoDisplay=true' "$d"; fi
+done
+rm -f /etc/xdg/autostart/onboard-autostart.desktop
+# Uygulama Mağazası sıralaması: Debian'da en çok kullanılan paketler önce (popcon istatistiği)
+mkdir -p /opt/tyros/ui/data
+if curl -fsSL --max-time 90 -o /tmp/popcon.gz https://popcon.debian.org/by_inst.gz; then
+  zcat /tmp/popcon.gz | awk '$1 ~ /^[0-9]+$/ {print $2}' | head -n 40000 > /opt/tyros/ui/data/popcon.txt || true
+else
+  echo "Not: popcon indirilemedi, mağaza alfabetik sıralar"
+fi
+rm -f /tmp/popcon.gz
+touch /opt/tyros/ui/data/popcon.txt
+chmod -R a+rX /opt/tyros/ui/data
+# Apache yalnızca bu bilgisayardaki arayüze hizmet ediyor: az iş parçacığı yeter (bellek tasarrufu)
+cat > /etc/apache2/conf-available/tyros-hafif.conf <<'APC'
+<IfModule mpm_event_module>
+    StartServers             1
+    ServerLimit              2
+    MinSpareThreads          4
+    MaxSpareThreads          20
+    ThreadsPerChild          16
+    MaxRequestWorkers        32
+    MaxConnectionsPerChild   0
+</IfModule>
+APC
+a2enconf tyros-hafif >/dev/null 2>&1 || true
+# Her isteği diske yazan genel erişim kaydını kapat (hata kaydı kalır)
+a2disconf other-vhosts-access-log >/dev/null 2>&1 || true
 # Arka plan araçları ve ayar pencereleri menüde görünmesin (TyrOS'ta karşılıkları var)
 for f in htop vim lxterminal thunar thunar-settings thunar-bulk-rename thunar-volman-settings \
          org.xfce.mousepad-settings chromium kdesystemsettings obconf nm-connection-editor synaptic \
