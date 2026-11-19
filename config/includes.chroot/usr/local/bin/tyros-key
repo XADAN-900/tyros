@@ -27,6 +27,7 @@ case "$1" in
       shot-area)   scrot -o -s -f "$F" ;;
     esac && [ -f "$F" ] && emit shot "$F"
     exit 0 ;;
+  lock) exec dm-tool lock ;;
   *) echo "Kullanım: tyros-key vol-up|vol-down|mute|bright-up|bright-down|shot|shot-window|shot-area" >&2; exit 2 ;;
 esac
 emit vol "$(wpctl get-volume $SINK 2>/dev/null)"

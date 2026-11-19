@@ -33,6 +33,12 @@ xset s off 2>/dev/null
 xsetroot -solid '#0b1220' 2>/dev/null
 xdg-user-dirs-update 2>/dev/null
 
+# Yönetici izni isteyen programlar (GParted, Synaptic, yazıcı ayarları…) için yetki penceresi
+if command -v lxpolkit >/dev/null; then
+  pkill -u "$(id -u)" -x lxpolkit 2>/dev/null
+  ( lxpolkit >>"$LOG/polkit.log" 2>&1 & )
+fi
+
 # 1) Sistem köprüsü — çökerse kendini yeniden başlatır
 ( while true; do
     python3 /opt/tyros/api/tyros-api.py >>"$LOG/api.log" 2>&1
