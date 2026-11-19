@@ -125,7 +125,7 @@ BUILTIN.files.launch = async (startPath) => {
       for (const d of l) drvBox.append(h('div', { class: 'fm-drive' },
         h('button', { 'data-path': d.mount || '', title: `${d.full || d.name} · ${fmtBytes(d.size)}`,
           onclick: async () => { try { go(await TyDrives.mount(d)); } catch (e) { fail(e); } } },
-          `${d.name} (${fmtBytes(d.size)})`),
+          d.size ? `${d.name} (${fmtBytes(d.size)})` : d.name),
         d.removable ? h('button', { class: 'fm-eject', title: 'Güvenle çıkar', html: svgIcon('eject'),
           onclick: () => TyDrives.eject(d).catch(fail) }) : null));
     };
