@@ -283,7 +283,11 @@ def build_icon_index():
     return idx
 
 
-def find_icon(name):
+_icon_suffix = None
+_icon_built = 0.0
+
+
+def find_icon(name, retry=True):
     global _icon_index
     if name.startswith("/"):
         p = os.path.realpath(name)
@@ -291,10 +295,36 @@ def find_icon(name):
         if p.startswith(ok_dirs) and p.endswith((".png", ".svg", ".xpm", ".jpg")) and os.path.isfile(p):
             return p
         return None
+    global _icon_built, _icon_suffix
     with _icon_lock:
         if _icon_index is None:
             _icon_index = build_icon_index()
-    return _icon_index.get(name) or _icon_index.get(name.lower())
+            _icon_suffix = None
+            _icon_built = time.time()
+    hit = _icon_index.get(name) or _icon_index.get(name.lower())
+    if hit or not name:
+        return hit
+    # Paket adı ile simge adı farklıysa (ör. "celluloid" → "io.github.celluloid_player.Celluloid")
+    if _icon_suffix is None:
+        suf = {}
+        for k in _icon_index:
+            last = k.rsplit(".", 1)[-1].lower()
+            if "." in k and last not in suf:
+                suf[last] = k
+        _icon_suffix = suf
+    n = name.lower()
+    cands = [n, re.sub(r"^(gnome|kde|xfce4|mate|lxqt|xfce)-", "", n), re.sub(r"-(gtk|qt|gtk3|qt5|qt6|gui|client|desktop)$", "", n)]
+    for c in cands:
+        if c in _icon_index:
+            return _icon_index[c]
+        if c in _icon_suffix:
+            return _icon_index[_icon_suffix[c]]
+    # Mağazadan yeni kurulan uygulamaların simgeleri: dizin eskiyse bir kez yeniden tara
+    if retry and time.time() - _icon_built > 60:
+        with _icon_lock:
+            _icon_index = None
+        return find_icon(name, retry=False)
+    return None
 
 
 # ---------------------------------------------------------------- dosyalar
@@ -562,8 +592,8 @@ def start_job(argv, title):
             job["code"] = 1
         job["done"] = True
         _apps_cache["t"] = 0
-        global _icon_index
-        _icon_index = None
+        global _icon_index, _icon_suffix
+        _icon_index = _icon_suffix = None
 
     threading.Thread(target=worker, daemon=True).start()
     return job
@@ -627,10 +657,13 @@ def r_settings(q, body):
 def r_blockgen(q, body):
     """Disk/USB değişikliği imzası — alt süreç başlatmadan, çok ucuz.
     Arayüz bunu sık sorar; sadece imza değişince ayrıntılı tarama yapar."""
-    try:
-        devs = sorted(os.listdir("/sys/class/block"))
-    except OSError:
-        devs = []
+    devs = []
+    # Diskler + USB aygıtları (telefon gibi disk olmayan aygıtlar da takılınca fark edilsin)
+    for d in ("/sys/class/block", "/sys/bus/usb/devices"):
+        try:
+            devs += sorted(os.listdir(d))
+        except OSError:
+            pass
     mounts = "".join(l.split(" ", 2)[0] + l.split(" ", 2)[1] for l in read("/proc/mounts").splitlines()
                      if l.startswith("/dev/"))
     return {"sig": str(hash(("|".join(devs), mounts)))}
