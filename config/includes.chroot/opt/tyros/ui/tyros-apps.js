@@ -524,6 +524,30 @@ BUILTIN.settings.launch = (section = 'look') => {
       group('İşlemler', h('div', { class: 'st-row st-btns' },
         h('button', { class: 'btn', onclick: () => BUILTIN.monitor.launch() }, 'Sistem izleyici'),
         h('button', { class: 'btn', onclick: () => BUILTIN.about.launch() }, 'TyrOS hakkında'))));
+    // Şifre değiştir (diske kurulu sistemde; canlı modda şifre yok)
+    if (!(await tryRun('test -d /run/live/medium && echo live')).includes('live')) {
+      const f = () => h('input', { type: 'password', class: 'field', style: { width: '220px' }, autocomplete: 'off' });
+      const cur = f(), n1 = f(), n2 = f();
+      const btn = h('button', { class: 'btn primary' }, 'Şifreyi değiştir');
+      btn.addEventListener('click', async () => {
+        if (!cur.value || !n1.value) return notify('Eksik bilgi', 'Mevcut ve yeni şifreyi yaz.', true);
+        if (n1.value !== n2.value) return notify('Şifreler aynı değil', 'Yeni şifreyi iki kez aynı yazmalısın.', true);
+        if (n1.value.length < 4) return notify('Şifre çok kısa', 'Yeni şifre en az 4 karakter olmalı.', true);
+        btn.disabled = true;
+        const tmp = '.cache/tyros/.sifre';
+        try {
+          // Şifreler komut satırında görünmesin diye geçici, yalnızca kullanıcının okuyabildiği bir dosyadan verilir
+          await API.post('/api/file', { path: tmp, content: `${cur.value}\n${n1.value}\n${n1.value}\n` });
+          const r = await API.post('/api/exec', { cmd: `chmod 600 ~/${tmp}; LC_ALL=C script -qec passwd /dev/null < ~/${tmp} 2>&1; rm -f ~/${tmp}`, timeout: 30 });
+          if (/success|updated/i.test(r.stdout || '')) { notify('Şifre değiştirildi', 'Bir sonraki girişte yeni şifreni kullan.'); cur.value = n1.value = n2.value = ''; }
+          else if (/Authentication|incorrect|failure/i.test(r.stdout || '')) notify('Mevcut şifre yanlış', 'Şifre değiştirilmedi.', true);
+          else notify('Şifre değiştirilemedi', /BAD PASSWORD|too (short|simple)|palindrome/i.test(r.stdout || '') ? 'Yeni şifre çok basit; harf ve rakam karışık daha uzun bir şifre dene.' : (r.stdout || ''), true);
+        } catch (e) { fail(e); } finally { tryRun(`rm -f ~/${tmp}`); btn.disabled = false; }
+      });
+      body.append(group('Hesap',
+        row('Mevcut şifre', cur), row('Yeni şifre', n1), row('Yeni şifre (tekrar)', n2),
+        h('div', { class: 'st-row st-btns' }, btn)));
+    }
     const fill = async () => {
       try {
         const s = await API.get('/api/sysinfo');
@@ -589,6 +613,24 @@ const CAT_META = {
 };
 /* Debian deposunda bir türdeki TÜM grafik uygulamaları listeler: [paket, ad, açıklama] */
 const ALL_CACHE = {};
+/* Popülerlik sırası: Debian'ın kullanım istatistiğinden (popcon) derleme sırasında üretilir.
+   En çok kullanılan uygulamalar listelerin başında görünür. */
+const POPCON_FILE = '/opt/tyros/ui/data/popcon.txt';
+let RANK = null;
+const rankReady = fetch('data/popcon.txt').then(r => r.ok ? r.text() : '').catch(() => '').then(t => {
+  RANK = new Map(); t.split('\n').forEach((n, i) => { n = n.trim(); if (n && !RANK.has(n)) RANK.set(n, i + 1); });
+});
+const rankOf = name => (RANK && RANK.get(name)) || 1e9;
+const byRank = (a, b) => (rankOf(a[0]) - rankOf(b[0])) || a[0].localeCompare(b[0]);
+// Paket adı ile simge adı farklı olanlar
+const PKG_ICON = {
+  'drawing': 'com.github.maoschanz.drawing', 'celluloid': 'io.github.celluloid_player.Celluloid', 'obs-studio': 'com.obsproject.Studio',
+  'handbrake': 'fr.handbrake.ghb', 'extremetuxracer': 'net.sourceforge.ExtremeTuxRacer', 'aisleriot': 'org.gnome.Aisleriot',
+  'build-essential': 'applications-development', 'python3-pip': 'python', 'nodejs': 'applications-development-web',
+  'default-jdk': 'applications-java', 'gnome-disk-utility': 'disk-utility', 'fastfetch': 'utilities-system-monitor',
+  'flatpak': 'system-software-install',
+};
+
 async function allOfType(key) {
   if (ALL_CACHE[key]) return ALL_CACHE[key];
   const re = CAT_META[key].re;
@@ -597,12 +639,14 @@ lists 2>/dev/null | awk -v re=${q(re)} 'BEGIN{RS="";FS="\\n"} { p="";s="";t=""; 
   if(p!="" && s~re){ g=(t~/(interface::x11|x11::application|uitoolkit::(gtk|qt|sdl))/)?1:(t==""?2:0); if(g) print g" "p } }' | sort -u > /tmp/tyros-cat-$$
 if grep -q '^1 ' /tmp/tyros-cat-$$; then names=$(sed -n 's/^1 //p' /tmp/tyros-cat-$$); else names=$(sed -n 's/^2 //p' /tmp/tyros-cat-$$); fi
 rm -f /tmp/tyros-cat-$$
+[ -f ${POPCON_FILE} ] && names=$(echo "$names" | awk 'NR==FNR{r[$1]=NR;next}{print (($1 in r)?r[$1]:999999), $1}' ${POPCON_FILE} - | sort -n | cut -d' ' -f2)
 [ -n "$names" ] && echo "$names" | head -n 600 | xargs apt-cache show --no-all-versions 2>/dev/null | awk '/^Package: /{p=$2} /^Description(-[A-Za-z_]+)?: /{sub(/^[^:]*: /,""); print p" - "$0}'`, 120);
   const noise = /^(lib|python3?-|golang-|node-|ruby-|r-cran-|texlive-|fonts?-|.*-(dev|dbg|doc|data|common|dbgsym|l10n-.*|help-.*|tests?)$)/;
   const seen = new Set();
   const res = out.split('\n').filter(Boolean).map(l => { const i = l.indexOf(' - '); return [l.slice(0, i), l.slice(0, i), l.slice(i + 3)]; })
-    .filter(p => p[0] && !noise.test(p[0]) && !seen.has(p[0]) && seen.add(p[0]))
-    .sort((a, b) => a[0].localeCompare(b[0]));
+    .filter(p => p[0] && !noise.test(p[0]) && !seen.has(p[0]) && seen.add(p[0]));
+  await rankReady;
+  res.sort(byRank);
   if (res.length) ALL_CACHE[key] = res;
   return res;
 }
@@ -647,7 +691,7 @@ BUILTIN.store.launch = () => {
       : h('button', { class: 'btn primary', onclick: e => { e.stopPropagation(); job('install', pkg, `${name} kuruluyor`); } }, 'Kur');
     btn.dataset.pkg = pkg;
     return h('div', { class: 'sto-card' },
-      appIcon({ name, icon: pkg }),
+      appIcon({ name, icon: PKG_ICON[pkg] || pkg }),
       h('div', { class: 'sto-info' }, h('div', { class: 'sto-name' }, name), h('div', { class: 'muted sto-desc', title: desc }, desc)),
       isIn ? h('span', { class: 'sto-badge' }, 'Yüklü') : null, btn);
   }
@@ -742,16 +786,17 @@ BUILTIN.store.launch = () => {
     const catHit = STORE_CATS.find(c => c[1].toLocaleLowerCase('tr').includes(tl) || CAT_META[c[0]].words.some(w => w === tl || (tl.length >= 4 && w.startsWith(tl))));
     const curated = [...new Map([...(catHit ? catHit[3] : []), ...STORE_CATS.flatMap(c => c[3]).filter(p => (p[0] + ' ' + p[1] + ' ' + p[2]).toLocaleLowerCase('tr').includes(tl))].map(p => [p[0], p])).values()];
     const [byName, byDesc] = await Promise.all([
-      tryRun(`apt-cache search --names-only -- ${q(term)} 2>/dev/null | head -n 60`),
-      tryRun(`apt-cache search -- ${q(term)} 2>/dev/null | head -n 200`),
+      tryRun(`apt-cache search --names-only -- ${q(term)} 2>/dev/null | head -n 500`),
+      tryRun(`apt-cache search -- ${q(term)} 2>/dev/null | head -n 2000`),
     ]);
     const parse = s => s.split('\n').filter(Boolean).map(l => { const i = l.indexOf(' - '); return [l.slice(0, i), l.slice(0, i), l.slice(i + 3)]; });
     const seen = new Set(curated.map(p => p[0]));
     // Kütüphane/geliştirme paketlerini gizle; asıl uygulamalar kalsın
     const noise = /^(lib|python3?-|golang-|node-|ruby-|r-cran-|texlive-|fonts?-|.*-(dev|dbg|doc|data|common|dbgsym|l10n-.*|help-.*)$)/;
-    const nameHits = parse(byName).filter(p => !seen.has(p[0]) && !noise.test(p[0]));
+    await rankReady;
+    const nameHits = parse(byName).filter(p => !seen.has(p[0]) && !noise.test(p[0])).sort(byRank).slice(0, 60);
     nameHits.forEach(p => seen.add(p[0]));
-    const descHits = parse(byDesc).filter(p => !seen.has(p[0]) && !noise.test(p[0])).slice(0, 30);
+    const descHits = parse(byDesc).filter(p => !seen.has(p[0]) && !noise.test(p[0])).sort(byRank).slice(0, 30);
     await refreshState().catch(() => {});
     const extra = [...nameHits, ...descHits];
     const inst = await tryRun(extra.length ? `dpkg-query -W -f='\${Package} \${db:Status-Status}\\n' ${extra.map(p => q(p[0])).join(' ')} 2>/dev/null` : 'true');

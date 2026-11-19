@@ -20,6 +20,7 @@ Object.assign(ICONS, {
   eject: '<path d="M12 5l7 8H5z"/><path d="M5 18h14"/>',
   usb: '<path d="M12 21V5"/><path d="M9 7l3-4 3 4"/><path d="M12 15l-5-3V9"/><path d="M12 13l5-3V8"/><rect x="5.5" y="7.5" width="3" height="2"/><circle cx="17" cy="7" r="1.3"/><circle cx="12" cy="20" r="1.6"/>',
   disk: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="16.5" cy="12" r="1.2"/><path d="M6.5 12h5"/>',
+  keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h1M9.5 10h1M13 10h1M16.5 10h1M7 14h10"/>',
   print: '<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/>',
   mouse: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
@@ -98,8 +99,28 @@ const Drives = {
         name: full.length > 26 ? full.slice(0, 25).trim() + '…' : full,   // çok uzun adlar taşmasın
       });
     }
+    // Android telefon / tablet (MTP): disk gibi görünmez, ayrıca bakılır
+    for (const ph of await this.phones()) res.push(ph);
     this.list = res;
     return res;
+  },
+  async phones() {
+    const o = await out(`command -v jmtpfs >/dev/null || exit 0
+      echo "M=$(awk '$3 ~ /jmtpfs|fuse.jmtpfs/ {print $2; exit}' /proc/mounts)"
+      timeout 6 jmtpfs -l 2>/dev/null | grep -E '^[0-9]+, *[0-9]+,' | sed 's/^/D=/'`, 12);
+    const mnt = (/^M=(.*)$/m.exec(o) || [])[1] || '';
+    const list = o.split('\n').filter(l => l.startsWith('D=')).map(l => {
+      // jmtpfs -l: "busLocation, devNum, productId, vendorId, product, vendor"
+      const f = l.slice(2).split(',').map(x => x.trim());
+      const id = `${f[0]}:${f[1]}`, product = f[4] || '', vendor = f.slice(5).join(',');
+      const full = (product || '').trim() || (vendor || '').split(/[ ,]/)[0] || 'Telefon';
+      return { path: 'mtp:' + full, mtp: true, removable: true, fs: 'mtp', size: 0, mount: unesc(mnt), full, id,
+        name: full.length > 26 ? full.slice(0, 25).trim() + '…' : full };
+    });
+    // Telefon açıkken jmtpfs onu meşgul gördüğü için listede çıkmayabilir: son bilineni göster
+    if (!list.length && mnt) return (this._phones || [{ path: 'mtp:Telefon', mtp: true, removable: true, fs: 'mtp', size: 0, full: 'Telefon', name: 'Telefon' }]).map(p => ({ ...p, mount: unesc(mnt) }));
+    this._phones = list;
+    return list;
   },
   async open(dr) { BUILTIN.files.launch(await this.mount(dr)); },
   // "Mounted /dev/sdb1 at /media/tyros/USB" ya da "already mounted at `/media/...'" çıktısından yolu al
@@ -113,6 +134,17 @@ const Drives = {
     } catch { return null; }
   },
   async mount(dr) {
+    if (dr.mtp) {
+      if (dr.mount) return dr.mount;
+      const r = await ex('mkdir -p "$HOME/Telefon" && jmtpfs "$HOME/Telefon" 2>&1 && echo "OK=$HOME/Telefon"', 40);
+      const m = /OK=(.*)/.exec(r.stdout || '');
+      if (!m || !(await out(`ls -A ${sh(m[1])} 2>/dev/null | head -n1`))) {
+        await ex('fusermount -u "$HOME/Telefon" 2>/dev/null || fusermount3 -u "$HOME/Telefon" 2>/dev/null');
+        throw new Error('Telefonun kilidini aç ve bildirimlerden USB modunu "Dosya aktarımı" yap, sonra tekrar dene.');
+      }
+      dr.mount = m[1];
+      return dr.mount;
+    }
     // Önceden bilinen yol hâlâ geçerli mi?
     let mp = await this.mountedAt(dr.path);
     if (!mp) {
@@ -129,6 +161,13 @@ const Drives = {
     return mp;
   },
   async eject(dr) {
+    if (dr.mtp) {
+      await ex('fusermount -u "$HOME/Telefon" 2>/dev/null || fusermount3 -u "$HOME/Telefon" 2>/dev/null; rmdir "$HOME/Telefon" 2>/dev/null');
+      dr.mount = '';
+      notify('Telefon çıkarılabilir', `${dr.name} bağlantısı güvenle kesildi.`);
+      Drives.changed();
+      return;
+    }
     if (dr.mount) {
       const r = await ex(`LC_ALL=C udisksctl unmount -b ${sh(dr.path)} --no-user-interaction 2>&1`, 40);
       if (r.code !== 0) {
@@ -146,6 +185,7 @@ const Drives = {
   // Herkesin anlayacağı kısa açıklama: "7,5 GB · USB bellek · FAT32"
   describe(dr) {
     const FS = { vfat: 'FAT32', exfat: 'exFAT', ntfs: 'NTFS (Windows)', ntfs3: 'NTFS (Windows)', ext4: 'Linux', ext3: 'Linux', ext2: 'Linux', btrfs: 'Linux', xfs: 'Linux', iso9660: 'CD/DVD kalıbı', hfsplus: 'Mac' };
+    if (dr.mtp) return ['Telefon / tablet', dr.mount ? 'Açık' : 'Açmak için tıkla'].join(' · ');
     return [fmtBytes(dr.size), dr.removable ? 'USB bellek' : 'Bilgisayardaki disk', FS[dr.fs] || (dr.fs || '').toUpperCase(), dr.mount ? 'Açık' : '']
       .filter(Boolean).join(' · ');
   },
@@ -172,13 +212,14 @@ async function watchDrives() {
     if (known) {
       const added = l.filter(d => !known.has(d.path) && d.removable);
       for (const d of added) {
-        await Drives.mount(d).catch(() => {});   // açılamazsa tıklanınca tekrar denenir ve sebebi gösterilir
+        if (!d.mtp) await Drives.mount(d).catch(() => {});   // açılamazsa tıklanınca tekrar denenir ve sebebi gösterilir
         window.TySound?.play('plug', true);
-        notify('USB sürücü takıldı', `${Drives.label(d)} — açmak için tıkla`);
+        if (d.mtp) notify('Telefon bağlandı', `${d.name} — dosyalarını açmak için tıkla (telefonda "Dosya aktarımı" seçili olmalı)`);
+        else notify('USB sürücü takıldı', `${Drives.label(d)} — açmak için tıkla`);
         const t = $('#toasts')?.lastElementChild;
         if (t) { t.style.cursor = 'pointer'; t.addEventListener('click', () => { t.remove(); Drives.open(d).catch(fail); }); }
       }
-      if ([...known].some(p => !keys.has(p) && /^\/dev\/sd/.test(p))) window.TySound?.play('unplug');
+      if ([...known].some(p => !keys.has(p) && /^(\/dev\/sd|mtp:)/.test(p))) window.TySound?.play('unplug');
       Drives.listeners.forEach(fn => fn(l));
     }
     known = keys;
@@ -240,6 +281,8 @@ const QP = {
       echo "bt=$(timeout 2 bluetoothctl show 2>/dev/null | awk '/Powered:/{print $2; exit}')"
       echo "rf=$(rfkill -n -o SOFT 2>/dev/null | sort -u | tr '\\n' ' ')"
       echo "hot=$(timeout 3 nmcli -t -f NAME con show --active 2>/dev/null | grep -cx TyrOS-Hotspot)"
+      echo "osk=$(pgrep -u "$(id -u)" -x onboard >/dev/null && echo 1)"
+      echo "oskok=$(command -v onboard >/dev/null && echo 1)"
     `, 15);
     const s = {};
     for (const line of t.split('\n')) { const i = line.indexOf('='); if (i > 0) s[line.slice(0, i)] = line.slice(i + 1).trim(); }
@@ -249,6 +292,7 @@ const QP = {
     s.plane = s.rf ? s.rf.trim() === 'blocked' : !!Settings.data.airplane;
     s.wiredOn = Number(s.wired) > 0;
     s.hotOn = Number(s.hot) > 0;
+    s.osk = s.osk === '1'; s.oskOk = s.oskok === '1';
     return (this.st = s);
   },
 
@@ -322,6 +366,8 @@ const QP = {
       onToggle: () => busy(async () => { await Settings.set({ nightLight: !d.nightLight }); await Display.apply(); }) }));
     tiles.push(this.tile({ icon: 'bell', label: 'Rahatsız etme', on: !!d.quietNotify, sub: d.quietNotify ? 'Açık' : 'Kapalı',
       onToggle: () => busy(() => Settings.set({ quietNotify: !d.quietNotify })), onMore: () => settings('notify') }));
+    tiles.push(this.tile({ icon: 'keyboard', label: 'Ekran klavyesi', on: s.osk, disabled: !s.oskOk, sub: !s.oskOk ? 'Yüklü değil' : s.osk ? 'Açık' : 'Kapalı',
+      onToggle: () => busy(() => ex(s.osk ? 'pkill -u "$(id -u)" -x onboard' : '(setsid -f onboard >/dev/null 2>&1 &); sleep 1')) }));
     tiles.push(this.tile({ icon: 'hotspot', label: 'Etkin nokta', on: s.hotOn, disabled: !s.wifidev,
       sub: !s.wifidev ? 'Wi-Fi yok' : s.hotOn ? 'Açık' : 'Kapalı',
       onToggle: () => busy(async () => {
