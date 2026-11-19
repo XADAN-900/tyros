@@ -6,6 +6,8 @@ if [ -z "$TYROS_SETSID" ]; then
   export TYROS_SETSID=1
   exec setsid "$0" "$@"
 fi
+# Giriş ekranı (LightDM) /usr/games'i PATH'e koymuyor: oyunlar bulunamıyordu
+case ":$PATH:" in *:/usr/games:*) ;; *) export PATH="$PATH:/usr/local/games:/usr/games" ;; esac
 LOG="$HOME/.cache/tyros"
 mkdir -p "$LOG" "$HOME/.config/tyros"
 PIDFILE="$HOME/.cache/tyros/session.pgid"
@@ -30,7 +32,8 @@ cleanup() { rm -f "$PIDFILE"; trap - TERM EXIT; kill -TERM -- "-$$" 2>/dev/null;
 trap cleanup TERM EXIT
 
 xset s off 2>/dev/null
-xsetroot -solid '#0b1220' 2>/dev/null
+# Arka plan açılış ekranıyla aynı renk, imleç normal ok (çarpı şeklinde X imleci görünmesin)
+xsetroot -solid '#0b1220' -cursor_name left_ptr 2>/dev/null
 xdg-user-dirs-update 2>/dev/null
 
 # Yönetici izni isteyen programlar (GParted, Synaptic, yazıcı ayarları…) için yetki penceresi
@@ -119,7 +122,7 @@ while xset q >/dev/null 2>&1; do
     --user-data-dir="$HOME/.config/tyros/shell" \
     --app=http://127.0.0.1/ \
     --window-position=0,0 --window-size="${W:-1280},${H:-800}" \
-    --no-first-run --no-default-browser-check --noerrdialogs \
+    --no-first-run --no-default-browser-check --noerrdialogs --force-dark-mode \
     --password-store=basic \
     --overscroll-history-navigation=0 --disable-pinch \
     --hide-crash-restore-bubble --disable-session-crashed-bubble --disable-infobars \
