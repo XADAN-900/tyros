@@ -17,5 +17,11 @@ case "$ACTION" in
       echo "$NAME sistem için gerekli, kaldırılamaz." >&2; exit 3 ;; esac
     exec apt-get remove -y -- "$NAME" ;;
   clean) apt-get clean; exec apt-get autoremove -y ;;
-  *) echo "Kullanım: tyros-pkg update|install AD|remove AD|clean" >&2; exit 2 ;;
+  upgrade)
+    apt-get update
+    exec apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade --with-new-pkgs ;;
+  firewall-on)  ufw default deny incoming >/dev/null; ufw default allow outgoing >/dev/null; exec ufw --force enable ;;
+  firewall-off) exec ufw disable ;;
+  firewall-status) ufw status 2>/dev/null | head -n1 ;;
+  *) echo "Kullanım: tyros-pkg update|install AD|remove AD|clean|upgrade|firewall-on|firewall-off|firewall-status" >&2; exit 2 ;;
 esac
