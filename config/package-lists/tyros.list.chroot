@@ -100,11 +100,29 @@ earlyoom
 # Ekran görüntüsü (Print Screen tuşu)
 scrot
 
+# --- Bir masaüstü sistemde olması gerekenler ---
+# Yazıcı: CUPS + USB'den sürücüsüz yazıcılar + yaygın sürücüler (HP, Epson, Canon…)
+cups
+ipp-usb
+printer-driver-gutenprint
+printer-driver-hpcups
+# Saatin internetten otomatik ayarlanması
+systemd-timesyncd
+# Word/Excel belgeleri düzgün görünsün (Arial, Times, Calibri, Cambria uyumlu yazı tipleri)
+fonts-liberation
+fonts-crosextra-carlito
+fonts-crosextra-caladea
+# Yönetici izni isteyen programlar için yetki penceresi (GParted, Synaptic…)
+lxpolkit
+# Fare/dokunmatik yüzey ayarları, güvenlik duvarı, donanım bilgisi, işlemci ısı yönetimi
+xinput
+ufw
+usbutils
+thermald
+
 # --- Komut satırı araçları ---
 htop
 nano
-vim
-git
 wget
 zip
 unzip
