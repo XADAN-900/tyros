@@ -42,7 +42,7 @@
     }
     return null;
   };
-  const LETTER = /[A-Za-zÇĞİÖŞÜçğıöşü]/;
+  const LETTER = /[A-Za-zÇĞİÖŞÜçğıöşü]|^\s*%\d/;      // "%25" gibi Türkçe yüzde yazımı da çevrilir (25%)
   function tr(s, el) {
     if (!s || !LETTER.test(s)) return null;
     const m = /^(\s*)([\s\S]*?)(\s*)$/.exec(s);
