@@ -438,11 +438,14 @@ window.addEventListener('DOMContentLoaded', () => {
   };
   // Masaüstü klasörü değişirse simgeleri yenile; çöp değişince de
   Trash.listeners.add(() => Shell.renderDesktop());
-  setInterval(async () => {
+  // Masaüstü klasörü değişince API haber verir (tyros-desk); ayrıca nadiren yedek kontrol
+  const deskCheck = async () => {
     if (!API.online) return;
     const sig = JSON.stringify((await desktopFiles()).map(f => f.name + f.mtime));
     if (sig !== desktopSig) Shell.renderDesktop();
-  }, 4000);
+  };
+  window.addEventListener('tyros-desk', deskCheck);
+  setInterval(deskCheck, 30000);
 });
 
 /* ------------------------------------------------------------ fareyle çerçeve çizerek seçme

@@ -211,12 +211,16 @@ const TyLive = {
 };
 window.TyLive = TyLive;
 async function watchDrives() {
-  let known = null, sig = null, pending = 1, netSig = null, appSig = null;
+  let known = null, sig = null, pending = 1, netSig = null, appSig = null, winSig = null, deskSig = null;
   const tick = async () => {
     // Ucuz imza kontrolü: bir şey takılıp çıkarılmadıkça ayrıntılı tarama yapma.
     // Değişince birkaç tur daha tara (yeni takılan USB'nin dosya sistemi birkaç saniyede tanınır).
     try {
-      const r = await API.get('/api/blockgen');
+      // Tek yoklama: kısayol tuşları, pencereler, masaüstü, ağ ve diskler (saniyede bir, alt süreç başlatmadan)
+      const r = await API.get('/api/tick');
+      if (r.events && r.events.length) handleEvents(r.events);
+      if (r.win !== undefined && r.win !== winSig) { if (winSig !== null) Shell.pollNativeWindows?.(); winSig = r.win; }
+      if (r.desk !== undefined && r.desk !== deskSig) { if (deskSig !== null) window.dispatchEvent(new Event('tyros-desk')); deskSig = r.desk; }
       if (r.sig !== sig) { sig = r.sig; pending = 3; }
       if (r.net !== undefined && r.net !== netSig) { if (netSig !== null) TyLive.net(); netSig = r.net; }
       if (r.apps !== undefined && r.apps !== appSig) { if (appSig !== null) Shell.loadApps(true); appSig = r.apps; }
@@ -257,7 +261,10 @@ function osd(icon, text, percent) {
 async function pollEvents() {
   let evs = [];
   try { evs = await API.get('/api/events'); } catch { return; }
-  for (const [type, val] of evs) {
+  handleEvents(evs);
+}
+function handleEvents(evs) {
+  for (const [type, val] of evs || []) {
     if (type === 'vol') {
       const m = /([\d.]+)/.exec(val || ''); const p = m ? Math.round(parseFloat(m[1]) * 100) : 0;
       const muted = /MUTED/.test(val || '');
@@ -448,8 +455,7 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   setTimeout(() => {
     if (Settings.data.nightLight) Display.apply();
-    watchDrives();
-    setInterval(pollEvents, 1500);
+    watchDrives();                       // kısayol tuşu olayları da bu tek yoklamayla gelir
     checkBattery(); setInterval(checkBattery, 60000);
   }, 2500);
 });
