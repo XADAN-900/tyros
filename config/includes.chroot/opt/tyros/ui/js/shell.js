@@ -224,7 +224,8 @@ const Shell = {
     WM.onChange(() => this.renderTaskbar());
     this.tickClock(); setInterval(() => this.tickClock(), 1000 * 10);
     this.refreshTray(); setInterval(() => this.refreshTray(), 15000);
-    setInterval(() => this.pollNativeWindows(), 2000);
+    // Pencere açılıp kapanınca API anında haber verir; başlık değişiklikleri için seyrek yedek kontrol
+    setInterval(() => this.pollNativeWindows(), 6000);
     setInterval(() => this.loadApps(), 60000);   // yeni kurulan uygulamaları menüye ekle
     this.bind();
     // Açılış ekranı, duvar kağıdı tamamen yüklenip masaüstü hazır olunca kalksın (yarım görüntü olmasın)
