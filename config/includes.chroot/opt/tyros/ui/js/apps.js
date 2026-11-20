@@ -37,7 +37,18 @@ BUILTIN.terminal.launch = async (cwd) => {
   try { realTerm = (await fetch('/term/', { method: 'HEAD' })).ok; } catch { /* ttyd yok */ }
   if (realTerm && !cwd) {
     const fr = h('iframe', { src: '/term/', title: 'Terminal' });
-    fr.addEventListener('load', () => fr.contentWindow?.focus());
+    fr.addEventListener('load', () => {
+      try {
+        const d = fr.contentDocument;
+        // ttyd'nin "✂" (kopyalandı) ve "96x26" (boyut) baloncuklarını gösterme
+        const st = d.createElement('style');
+        st.textContent = 'div[style*="xx-large"] { display: none !important; }';
+        d.head.append(st);
+        // Terminale dokununca ekran klavyesi açılabilsin
+        d.addEventListener('pointerdown', e => window.TyOSK?.note(e.pointerType), true);
+      } catch { /* başka kaynak */ }
+      fr.contentWindow?.focus();
+    });
     box.append(fr);
   } else {
     simpleTerminal(box, win, cwd);
