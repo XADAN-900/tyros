@@ -37,7 +37,8 @@ xsetroot -solid '#0b1220' -cursor_name left_ptr 2>/dev/null
 xdg-user-dirs-update 2>/dev/null
 
 # Yönetici izni isteyen programlar (GParted, Synaptic, yazıcı ayarları…) için yetki penceresi
-if command -v lxpolkit >/dev/null; then
+# Canlı USB oturumunda yönetici izinleri zaten şifresiz; yetki penceresi programına gerek yok (RAM tasarrufu)
+if command -v lxpolkit >/dev/null && [ ! -d /run/live/medium ]; then
   pkill -u "$(id -u)" -x lxpolkit 2>/dev/null
   ( lxpolkit >>"$LOG/polkit.log" 2>&1 & )
 fi
@@ -140,7 +141,8 @@ while xset q >/dev/null 2>&1; do
     --password-store=basic \
     --overscroll-history-navigation=0 --disable-pinch \
     --hide-crash-restore-bubble --disable-session-crashed-bubble --disable-infobars \
-    --disable-features=Translate,TranslateUI,DownloadBubble,DownloadBubbleV2,MediaRouter,GlobalMediaControls,ChromeWhatsNewUI,PrivacySandboxSettings4,OptimizationGuideModelDownloading,OptimizationHintsFetching,OptimizationTargetPrediction,AutofillServerCommunication,InterestFeedContentSuggestions,SpareRendererForSitePerProcess \
+    --disable-features=Translate,TranslateUI,DownloadBubble,DownloadBubbleV2,MediaRouter,GlobalMediaControls,ChromeWhatsNewUI,PrivacySandboxSettings4,OptimizationGuideModelDownloading,OptimizationHintsFetching,OptimizationTargetPrediction,AutofillServerCommunication,InterestFeedContentSuggestions,SpareRendererForSitePerProcess,AudioServiceOutOfProcess \
+    --enable-features=NetworkServiceInProcess,NetworkServiceInProcess2 \
     --disable-component-update --disable-background-networking --disable-sync --no-pings \
     --disable-breakpad --disable-domain-reliability --disable-client-side-phishing-detection \
     --autoplay-policy=no-user-gesture-required \
