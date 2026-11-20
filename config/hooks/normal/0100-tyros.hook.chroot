@@ -104,11 +104,13 @@ apt-get install -y --no-install-recommends onboard 2>/dev/null || echo "Not: onb
 # Chromium web tarayıcısı menüde görünsün ve kurulan dilde açılsın (çeviriler)
 apt-get install -y --no-install-recommends chromium-l10n 2>/dev/null || echo "Not: chromium-l10n kurulamadı"
 if [ -f /usr/share/applications/chromium.desktop ]; then sed -i '/^NoDisplay=true$/d' /usr/share/applications/chromium.desktop; fi
-for f in onboard onboard-settings; do
+# Ekran klavyesi Başlat menüsünde görünsün (hızlı paneldeki düğmeye ek olarak); ayar penceresi gizli kalsın
+for f in onboard-settings; do
   d=/usr/share/applications/$f.desktop
   if [ -f "$d" ] && ! grep -q '^NoDisplay=true' "$d"; then sed -i '/^\[Desktop Entry\]/a NoDisplay=true' "$d"; fi
 done
 rm -f /etc/xdg/autostart/onboard-autostart.desktop
+if [ -f /usr/share/applications/onboard.desktop ]; then sed -i '/^NoDisplay=true$/d' /usr/share/applications/onboard.desktop; fi
 # Uygulama Mağazası sıralaması: Debian'da en çok kullanılan paketler önce (popcon istatistiği)
 mkdir -p /opt/tyros/ui/data
 if curl -fsSL --max-time 90 -o /tmp/popcon.gz https://popcon.debian.org/by_inst.gz; then
