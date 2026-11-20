@@ -407,6 +407,9 @@ BUILTIN.settings.launch = (section = 'look') => {
         run(`setxkbmap ${v.split(':').map(q).join(' -variant ')}`).then(() => { Settings.set({ kbLayout: v }); notify('Klavye düzeni değişti', LAYOUTS.find(l => l[0] === v)[1]); }).catch(fail);
       }), 'Hemen uygulanır ve her açılışta hatırlanır'),
       row('Dene', h('input', { class: 'field', placeholder: 'Buraya yazarak deneyebilirsin…', style: { width: '260px' } }))));
+    body.append(group('Ekran klavyesi',
+      row('Kendiliğinden açılsın', select([['touch', 'Yazı alanına dokununca'], ['always', 'Her zaman'], ['off', 'Kapalı']], Settings.data.oskAuto || 'touch',
+        v => Settings.set({ oskAuto: v })), 'Dokunmatik ekranlarda yazı alanına dokununca açılır, alandan çıkınca kapanır')));
     // Sistem dili (programların dili) kurulumda seçilir; TyrOS arayüzünün dili buradan değiştirilebilir
     const L = await API.get('/api/lang').catch(() => ({}));
     const code = (L.system || '').split('.')[0].replace('_', '-');

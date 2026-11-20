@@ -657,5 +657,9 @@ window.TY_I18N.en = {
 "{0} uygulama": "{0} apps",
 "PDF okuyucu": "PDF reader",
 "FTP istemcisi": "FTP client",
-"IRC sohbet": "IRC chat"
+"IRC sohbet": "IRC chat",
+"Kendiliğinden açılsın": "Open automatically",
+"Yazı alanına dokununca": "When a text field is touched",
+"Her zaman": "Always",
+"Dokunmatik ekranlarda yazı alanına dokununca açılır, alandan çıkınca kapanır": "On touch screens it opens when you touch a text field and closes when you leave it"
 };

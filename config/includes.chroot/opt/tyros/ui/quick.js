@@ -210,6 +210,44 @@ const TyLive = {
   },
 };
 window.TyLive = TyLive;
+
+/* Ekran klavyesi: yazı alanına dokununca kendiliğinden açılır, alandan çıkınca kapanır.
+   Ayarlar > Klavye ve dil: "Dokununca" (varsayılan; fareyle tıklayınca açılmaz), "Her zaman", "Kapalı". */
+const TyOSK = {
+  ptr: '', ptrT: 0, auto: false, ht: null,
+  note(type) { this.ptr = type; this.ptrT = Date.now(); },
+  isText(el) {
+    if (!el) return false;
+    if (el.tagName === 'TEXTAREA' || el.isContentEditable) return !el.readOnly;
+    if (el.tagName === 'INPUT') return !el.readOnly && !el.disabled && !/^(button|checkbox|radio|range|color|file|submit|reset|image|hidden)$/i.test(el.type);
+    return el.tagName === 'IFRAME' && /\/term\//.test(el.getAttribute('src') || '');
+  },
+  dbus(m) { return `dbus-send --session --print-reply --reply-timeout=2000 --type=method_call --dest=org.onboard.Onboard /org/onboard/Onboard/Keyboard org.onboard.Onboard.Keyboard.${m} >/dev/null 2>&1`; },
+  show() {
+    this.auto = true;
+    // Açıksa göster, kapalıysa başlat
+    API.post('/api/exec', { cmd: `command -v onboard >/dev/null || exit 0; if pgrep -u "$(id -u)" -x onboard >/dev/null; then ${this.dbus('Show')} || { pkill -u "$(id -u)" -x onboard; sleep 0.3; (setsid -f onboard >/dev/null 2>&1 &); }; else (setsid -f onboard >/dev/null 2>&1 &); fi`, timeout: 10 }).catch(() => {});
+  },
+  hide() {
+    if (!this.auto) return;                 // elle açılan klavyeye dokunma
+    this.auto = false;
+    API.post('/api/exec', { cmd: `${this.dbus('Hide')} || pkill -u "$(id -u)" -x onboard; true`, timeout: 10 }).catch(() => {});
+  },
+};
+window.TyOSK = TyOSK;
+document.addEventListener('pointerdown', e => TyOSK.note(e.pointerType), true);
+document.addEventListener('focusin', e => {
+  const mode = Settings.data.oskAuto || 'touch';
+  if (mode === 'off' || !TyOSK.isText(e.target)) return;
+  if (mode === 'touch' && !(TyOSK.ptr === 'touch' && Date.now() - TyOSK.ptrT < 1500)) return;
+  clearTimeout(TyOSK.ht);
+  TyOSK.show();
+});
+document.addEventListener('focusout', e => {
+  if (!TyOSK.isText(e.target)) return;
+  clearTimeout(TyOSK.ht);
+  TyOSK.ht = setTimeout(() => { if (!TyOSK.isText(document.activeElement)) TyOSK.hide(); }, 500);
+});
 async function watchDrives() {
   let known = null, sig = null, pending = 1, netSig = null, appSig = null, winSig = null, deskSig = null;
   const tick = async () => {
