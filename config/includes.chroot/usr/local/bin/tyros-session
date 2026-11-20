@@ -63,7 +63,7 @@ if command -v ttyd >/dev/null; then
     while true; do
       rm -f /run/tyros/ttyd.sock
       ttyd -i /run/tyros/ttyd.sock -b /term -W \
-        -t fontSize=14 -t disableLeaveAlert=true \
+        -t fontSize=14 -t disableLeaveAlert=true -t disableResizeOverlay=true \
         -t 'theme={"background":"#0d1116","foreground":"#d7e0e8","cursor":"#8b7cf0"}' \
         bash -l >>"$LOG/ttyd.log" 2>&1
       sleep 1
