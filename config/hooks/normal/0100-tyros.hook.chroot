@@ -101,6 +101,9 @@ apt-get install -y --no-install-recommends hunspell-tr 2>/dev/null || echo "Not:
 # Android telefon/tablet dosyalarına erişim (MTP) ve dokunmatik ekranlar için ekran klavyesi
 apt-get install -y --no-install-recommends jmtpfs 2>/dev/null || echo "Not: jmtpfs kurulamadı"
 apt-get install -y --no-install-recommends onboard 2>/dev/null || echo "Not: onboard kurulamadı"
+# Chromium web tarayıcısı menüde görünsün ve kurulan dilde açılsın (çeviriler)
+apt-get install -y --no-install-recommends chromium-l10n 2>/dev/null || echo "Not: chromium-l10n kurulamadı"
+if [ -f /usr/share/applications/chromium.desktop ]; then sed -i '/^NoDisplay=true$/d' /usr/share/applications/chromium.desktop; fi
 for f in onboard onboard-settings; do
   d=/usr/share/applications/$f.desktop
   if [ -f "$d" ] && ! grep -q '^NoDisplay=true' "$d"; then sed -i '/^\[Desktop Entry\]/a NoDisplay=true' "$d"; fi
@@ -133,7 +136,7 @@ a2enconf tyros-hafif >/dev/null 2>&1 || true
 a2disconf other-vhosts-access-log >/dev/null 2>&1 || true
 # Arka plan araçları ve ayar pencereleri menüde görünmesin (TyrOS'ta karşılıkları var)
 for f in htop vim lxterminal thunar thunar-settings thunar-bulk-rename thunar-volman-settings \
-         org.xfce.mousepad-settings chromium kdesystemsettings obconf nm-connection-editor synaptic \
+         org.xfce.mousepad-settings kdesystemsettings obconf nm-connection-editor synaptic \
          debian-xterm debian-uxterm xterm uxterm; do
   d=/usr/share/applications/$f.desktop
   if [ -f "$d" ] && ! grep -q '^NoDisplay=true' "$d"; then sed -i '/^\[Desktop Entry\]/a NoDisplay=true' "$d"; fi
@@ -163,6 +166,8 @@ printf '[Journal]\nSystemMaxUse=50M\nRuntimeMaxUse=30M\n' > /etc/systemd/journal
 # zram için önerilen ayarlar: takastan tek tek sayfa oku (sıkıştırılmış bellekte toplu okuma gereksiz),
 # bellek sıkışınca ani takılma yerine erken ve küçük adımlarla yer aç
 printf 'vm.swappiness=100\nvm.vfs_cache_pressure=50\nvm.page-cluster=0\nvm.watermark_boost_factor=0\nvm.watermark_scale_factor=125\n' > /etc/sysctl.d/90-tyros.conf
+# İşlemciyi her saniye uyandıran donanım bekçisini kapat (powertop önerisi; güç ve ısı tasarrufu)
+printf 'kernel.nmi_watchdog=0\n' > /etc/sysctl.d/91-tyros-guc.conf
 # Yazıcı simgesi: TyrOS'ta sistem tepsisi olmadığı için görünmüyor ama arka planda ~30 MB bellek tutuyordu.
 # Yazdırma etkilenmez (Ayarlar > Yazıcılar ve uygulamaların yazdır penceresi aynen çalışır).
 rm -f /etc/xdg/autostart/print-applet.desktop
