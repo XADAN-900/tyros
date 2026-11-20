@@ -580,6 +580,54 @@ def _net_watch():
         time.sleep(3)
 
 
+# Pencere açılıp kapanınca ya da öne gelince haber al (sürekli wmctrl çalıştırmak yerine)
+_win_gen = [0]
+
+
+def _win_watch():
+    if not have("xprop") or not os.environ.get("DISPLAY"):
+        return
+    cmd = ["xprop", "-spy", "-root", "_NET_CLIENT_LIST", "_NET_ACTIVE_WINDOW"]
+    if have("stdbuf"):
+        cmd = ["stdbuf", "-oL"] + cmd                 # her olay hemen gelsin (tamponlanmasın)
+    fails = 0
+    while True:
+        t0 = time.time()
+        try:
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                 stdin=subprocess.DEVNULL, text=True)
+            for _ in p.stdout:
+                _win_gen[0] += 1
+            p.wait()
+        except Exception:
+            pass
+        fails = fails + 1 if time.time() - t0 < 5 else 0
+        time.sleep(60 if fails > 3 else 3)
+
+
+_desk = {"t": 0.0, "path": None}
+
+
+def desktop_dir():
+    if time.time() - _desk["t"] > 30:
+        path = None
+        for line in read(os.path.join(HOME, ".config/user-dirs.dirs")).splitlines():
+            m = re.match(r'XDG_DESKTOP_DIR="(.*)"', line.strip())
+            if m:
+                path = m.group(1).replace("$HOME", HOME)
+        _desk.update(t=time.time(), path=path or os.path.join(HOME, "Desktop"))
+    return _desk["path"]
+
+
+def desk_sig():
+    """Masaüstü klasörü değişikliği imzası (alt süreç yok)."""
+    try:
+        with os.scandir(desktop_dir()) as it:
+            return str(hash(tuple(sorted((e.name, e.stat().st_mtime_ns) for e in it if not e.name.startswith(".")))))
+    except OSError:
+        return "-"
+
+
 def net_sig():
     """Ağ / Wi-Fi / Bluetooth / uçak modu değişikliği imzası (alt süreç başlatmadan)."""
     parts = [str(_net_gen[0])]
@@ -864,6 +912,16 @@ def r_lang(q, body):
     return {"ui": ui, "pref": pref, "system": sysl, "code": code}
 
 
+def r_tick(q, body):
+    """Arayüzün tek yoklaması: diskler, ağ, uygulamalar, kısayol tuşları, pencereler, masaüstü.
+    Eskiden ayrı ayrı 4 ayrı zamanlayıcıyla soruluyordu; tek istek işlemciyi ve gücü daha az yorar."""
+    r = r_blockgen(q, body)
+    r["events"] = r_events(q, body)
+    r["win"] = _win_gen[0]
+    r["desk"] = desk_sig()
+    return r
+
+
 def r_ping(q, body):
     return {"ok": True, "name": "TyrOS", "version": "1.0", "term": have("ttyd")}
 
@@ -872,6 +930,7 @@ ROUTES = {
     ("GET", "/api/ping"): r_ping,
     ("GET", "/api/lang"): r_lang,
     ("GET", "/api/blockgen"): r_blockgen,
+    ("GET", "/api/tick"): r_tick,
     ("GET", "/api/events"): r_events,
     ("GET", "/api/sysinfo"): r_sysinfo,
     ("GET", "/api/apps"): r_apps,
@@ -1006,6 +1065,7 @@ def main():
     cpu_percent()
     threading.Thread(target=find_icon, args=("x",), daemon=True).start()  # simge dizinini önceden hazırla
     threading.Thread(target=_net_watch, daemon=True).start()              # ağ değişikliklerini anında yakala
+    threading.Thread(target=_win_watch, daemon=True).start()              # pencere değişikliklerini anında yakala
     srv = ThreadingHTTPServer((ARGS.host, ARGS.port), Handler)
     srv.daemon_threads = True
     print(f"TyrOS API http://{ARGS.host}:{ARGS.port} adresinde çalışıyor", flush=True)
