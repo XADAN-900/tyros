@@ -897,19 +897,6 @@ BUILTIN.store.launch = () => {
     main.replaceChildren(...parts);
   }
 
-  // apt çıktısını sade bir aşama yazısına çevir
-  function stage(txt) {
-    const t = (txt || '').trim();
-    if (!t) return 'Hazırlanıyor…';
-    const last = t.split('\n').pop();
-    if (/^(Get|Alınıyor|İndir)/i.test(last) || /Fetched|indirildi/i.test(last)) return 'İndiriliyor…';
-    if (/Unpacking|açılıyor|Paketten/i.test(last)) return 'Dosyalar açılıyor…';
-    if (/Setting up|Ayarlanıyor|Kuruluyor/i.test(last)) return 'Kuruluyor…';
-    if (/Removing|Kaldırılıyor/i.test(last)) return 'Kaldırılıyor…';
-    if (/Processing triggers|tetikleyici/i.test(last)) return 'Son ayarlar yapılıyor…';
-    if (/Reading|Building|Okunuyor|Oluşturuluyor|Hit|Bağlanıyor|Hazırlanıyor/i.test(last)) return 'Hazırlanıyor…';
-    return 'Çalışıyor…';
-  }
   async function job(action, pkg, title) {
     const id = Date.now().toString(36);
     const log = `/tmp/tyros-pkg-${id}.log`, rc = `/tmp/tyros-pkg-${id}.rc`;
@@ -920,25 +907,36 @@ BUILTIN.store.launch = () => {
       const net = await tryRun('timeout 6 getent hosts deb.debian.org >/dev/null 2>&1 && echo ok', 10);
       if (!net.includes('ok')) { notify('İnternet bağlantısı yok', 'Uygulama indirmek için bir ağa bağlanıp tekrar dene.', true, 7000); restore(); return; }
     }
-    // Üstte anlaşılır aşama, altında terminaldeki gibi canlı işlem kaydı
-    const stageEl = h('div', { class: 'sto-stage' }, 'Hazırlanıyor…');
-    const logEl = h('pre', { class: 'sto-log' }, '');
-    status.hidden = false; status.replaceChildren(h('div', { class: 'sto-spin' }), h('div', { class: 'sto-st' }, h('b', {}, title + '…'), stageEl, logEl));
+    // Terminaldeki gibi canlı işlem kaydı (kurma, kaldırma ve liste güncellemede; her uygulamada)
+    const cmdLine = '$ apt-get ' + ({ install: 'install ', remove: 'remove ', update: 'update', upgrade: 'upgrade' }[action] || action + ' ') + (pkg || '');
+    const logEl = h('pre', { class: 'sto-log', 'data-notr': '' }, cmdLine + '\n');
+    status.hidden = false; status.replaceChildren(h('div', { class: 'sto-st' }, h('b', {}, title + '…'), logEl));
     try {
       await run(`(sudo -n /usr/local/sbin/tyros-pkg ${action} ${pkg ? q(pkg) : ''} >${log} 2>&1; echo $? >${rc}) >/dev/null 2>&1 &`);
     } catch (e) { status.hidden = true; return fail(e); }
+    let shown = '';
+    const paint = txt => {
+      const t = cmdLine + '\n' + (txt || '').replace(/\r\n?/g, '\n').split('\n').filter(l => l.trim()).join('\n');
+      if (t === shown) return;
+      logEl.textContent = shown = t;
+      logEl.scrollTop = logEl.scrollHeight;          // kaydırma çubuğu yok; hep en son satırlar görünür
+    };
+    let busy = false;
     const poll = setInterval(async () => {
-      const out = await tryRun(`tail -n 8 ${log} 2>/dev/null; echo "@@"; cat ${rc} 2>/dev/null`);
-      const [txt, code] = out.split('@@');
-      stageEl.textContent = stage(txt);
-      logEl.textContent = (txt || '').replace(/\r/g, '\n').split('\n').filter(l => l.trim()).slice(-8).join('\n');
-      logEl.scrollTop = logEl.scrollHeight;
-      if (code && code.trim() !== '') {
+      if (busy) return;
+      busy = true;
+      try {
+        const out = await tryRun(`tail -n 200 ${log} 2>/dev/null; echo "@@"; cat ${rc} 2>/dev/null`);
+        const i = out.lastIndexOf('@@');
+        const txt = i < 0 ? out : out.slice(0, i), code = i < 0 ? '' : out.slice(i + 2).trim();
+        paint(txt);
+        if (code === '') return;
         clearInterval(poll);
-        const full = code.trim() === '0' ? '' : await tryRun(`tail -n 80 ${log} 2>/dev/null`);
+        const ok = code === '0';
+        const full = ok ? '' : await tryRun(`tail -n 80 ${log} 2>/dev/null`);
         tryRun(`rm -f ${log} ${rc}`);
-        status.hidden = true;
-        if (code.trim() === '0') {
+        status.hidden = true;                          // iş bitince terminal kaydı kapanır
+        if (ok) {
           if (action === 'install') installed.add(pkg);
           if (action === 'remove') installed.delete(pkg);
           notify('Tamamlandı', title.replace('kuruluyor', 'kuruldu').replace('kaldırılıyor', 'kaldırıldı').replace('güncelleniyor', 'güncellendi'));
@@ -947,8 +945,8 @@ BUILTIN.store.launch = () => {
           notify('İşlem başarısız', full || txt || '', true, 9000);
         }
         if (view === 'search' && search.value.trim()) doSearch(search.value.trim()); else show(view);
-      }
-    }, 1200);
+      } finally { busy = false; }
+    }, 500);
   }
 
   show('home');
