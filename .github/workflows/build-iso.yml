@@ -63,8 +63,8 @@ jobs:
           mkdir release
           ISO=$(ls tyros-*.iso | head -n1)
           SIZE=$(stat -c %s "$ISO")
-          # GitHub tek dosya için 2 GB sınırı koyar; büyükse parçalara böl
-          if [ "$SIZE" -gt 2000000000 ]; then
+          # GitHub tek dosya için 2 GiB (2147483648 bayt) sınırı koyar; büyükse parçalara böl
+          if [ "$SIZE" -gt 2147000000 ]; then
             split -b 1900M -d "$ISO" "release/$ISO.part"
             echo "ISO 2 GB'tan büyük olduğu için parçalara bölündü. Birleştirmek için:" > release/BIRLESTIR.txt
             echo "  Linux/Mac:  cat $ISO.part* > $ISO" >> release/BIRLESTIR.txt
