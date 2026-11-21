@@ -132,6 +132,13 @@ while xset q >/dev/null 2>&1; do
   # Önceki kapanış düzgün değilse çıkan "Sayfalar geri yüklensin mi?" balonunu engelle
   [ -f "$PREF" ] && sed -i -e 's/"exited_cleanly":false/"exited_cleanly":true/' \
     -e 's/"exit_type":"[A-Za-z]*"/"exit_type":"Normal"/' "$PREF"
+  # Arayüz penceresi ilk açıldığında içi çizilene kadar bir an bozuk görüntü çıkmasın:
+  # açılış rengiyle düz bir örtü koy; arayüz çizilince (ya da en geç 12 sn'de) kendiliğinden kalkar
+  rm -f "$LOG/ui-ready"
+  if [ -x /usr/local/bin/tyros-cover ]; then
+    ( /usr/local/bin/tyros-cover >>"$LOG/cover.log" 2>&1 & )
+    sleep 0.15
+  fi
   "$BROWSER" \
     --class=TyrOSShell \
     --user-data-dir="$HOME/.config/tyros/shell" \

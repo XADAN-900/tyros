@@ -1,0 +1,78 @@
+#!/usr/bin/python3
+# TyrOS açılış örtüsü.
+# Arayüz penceresi (Chromium) ekrana ilk geldiğinde içi henüz çizilmemiş oluyor ve bir an
+# eski görüntü artıkları / karışık çizgiler görünüyordu. Bu program, arayüz ilk kez çizilene
+# kadar ekranı açılış rengiyle (#0b1220) düz bir örtüyle kapatır, sonra kendini kaldırır.
+# Arayüz "hazırım" dediğinde (dosya: ~/.cache/tyros/ui-ready) ya da en geç 12 saniyede kalkar;
+# herhangi bir hata olursa hiçbir şey yapmadan çıkar (masaüstü asla örtü altında kalmaz).
+import ctypes, os, sys, time
+
+READY = os.path.expanduser("~/.cache/tyros/ui-ready")
+LIMIT = 12.0
+COLOR = 0x0B1220
+
+
+class XSetWindowAttributes(ctypes.Structure):
+    _fields_ = [("background_pixmap", ctypes.c_ulong), ("background_pixel", ctypes.c_ulong),
+                ("border_pixmap", ctypes.c_ulong), ("border_pixel", ctypes.c_ulong),
+                ("bit_gravity", ctypes.c_int), ("win_gravity", ctypes.c_int),
+                ("backing_store", ctypes.c_int), ("backing_planes", ctypes.c_ulong),
+                ("backing_pixel", ctypes.c_ulong), ("save_under", ctypes.c_int),
+                ("event_mask", ctypes.c_long), ("do_not_propagate_mask", ctypes.c_long),
+                ("override_redirect", ctypes.c_int), ("colormap", ctypes.c_ulong),
+                ("cursor", ctypes.c_ulong)]
+
+
+def main():
+    try:
+        X = ctypes.CDLL("libX11.so.6")
+    except OSError:
+        return
+    vp, ul, i = ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int
+    X.XOpenDisplay.restype = vp; X.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    X.XDefaultScreen.argtypes = [vp]
+    X.XRootWindow.restype = ul; X.XRootWindow.argtypes = [vp, i]
+    X.XDisplayWidth.argtypes = [vp, i]; X.XDisplayHeight.argtypes = [vp, i]
+    X.XDefaultDepth.argtypes = [vp, i]
+    X.XCreateWindow.restype = ul
+    X.XCreateWindow.argtypes = [vp, ul, i, i, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint, i,
+                                ctypes.c_uint, vp, ul, ctypes.POINTER(XSetWindowAttributes)]
+    for f in ("XMapRaised", "XRaiseWindow", "XDestroyWindow"):
+        getattr(X, f).argtypes = [vp, ul]
+    X.XFlush.argtypes = [vp]; X.XSync.argtypes = [vp, i]; X.XCloseDisplay.argtypes = [vp]
+
+    d = X.XOpenDisplay(None)
+    if not d:
+        return
+    s = X.XDefaultScreen(d)
+    if X.XDefaultDepth(d, s) < 24:          # beklenmedik renk derinliği: dokunma
+        X.XCloseDisplay(d)
+        return
+    root = X.XRootWindow(d, s)
+    w, h = X.XDisplayWidth(d, s), X.XDisplayHeight(d, s)
+    a = XSetWindowAttributes()
+    a.background_pixel = COLOR
+    a.override_redirect = 1                 # pencere yöneticisi karışmasın, odak almasın
+    CWBackPixel, CWOverrideRedirect = 1 << 1, 1 << 9
+    win = X.XCreateWindow(d, root, 0, 0, w, h, 0, 0, 1, None,   # 0 = CopyFromParent, 1 = InputOutput
+                          CWBackPixel | CWOverrideRedirect, ctypes.byref(a))
+    X.XMapRaised(d, win)
+    X.XSync(d, 0)
+    end = time.monotonic() + LIMIT
+    try:
+        while time.monotonic() < end and not os.path.exists(READY):
+            X.XRaiseWindow(d, win)          # arayüz penceresi açılınca da en üstte kal
+            X.XFlush(d)
+            time.sleep(0.05)
+    finally:
+        X.XDestroyWindow(d, win)
+        X.XSync(d, 0)
+        X.XCloseDisplay(d)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception:
+        pass
+    sys.exit(0)
