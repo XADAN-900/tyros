@@ -189,7 +189,7 @@ printf 'kernel.nmi_watchdog=0\n' > /etc/sysctl.d/91-tyros-guc.conf
 rm -f /etc/xdg/autostart/print-applet.desktop
 # PipeWire "filter chain": ayar dosyası olmadığında hiçbir iş yapmadan ayrı bir ses süreci olarak boşta bekliyordu.
 # Ses, mikrofon, Bluetooth kulaklık bundan etkilenmez (onlar pipewire + wireplumber + pipewire-pulse ile çalışır).
-systemctl --global disable filter-chain.service 2>/dev/null || true
+# (systemctl disable KULLANMA: birimdeki "Also=pipewire.socket" yüzünden pipewire.socket'i de kapatır)
 rm -f /etc/systemd/user/default.target.wants/filter-chain.service
 
 # --- Donanıma göre servisler: donanım yoksa servis hiç çalışmaz, takılınca kendiliğinden başlar ---
