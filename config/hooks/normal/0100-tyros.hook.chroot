@@ -187,6 +187,10 @@ printf 'kernel.nmi_watchdog=0\n' > /etc/sysctl.d/91-tyros-guc.conf
 # Yazıcı simgesi: TyrOS'ta sistem tepsisi olmadığı için görünmüyor ama arka planda ~30 MB bellek tutuyordu.
 # Yazdırma etkilenmez (Ayarlar > Yazıcılar ve uygulamaların yazdır penceresi aynen çalışır).
 rm -f /etc/xdg/autostart/print-applet.desktop
+# PipeWire "filter chain": ayar dosyası olmadığında hiçbir iş yapmadan ayrı bir ses süreci olarak boşta bekliyordu.
+# Ses, mikrofon, Bluetooth kulaklık bundan etkilenmez (onlar pipewire + wireplumber + pipewire-pulse ile çalışır).
+systemctl --global disable filter-chain.service 2>/dev/null || true
+rm -f /etc/systemd/user/default.target.wants/filter-chain.service
 
 # --- Donanıma göre servisler: donanım yoksa servis hiç çalışmaz, takılınca kendiliğinden başlar ---
 # Modem servisi: yalnızca 3G/4G modem (ya da USB seri modem) varsa
