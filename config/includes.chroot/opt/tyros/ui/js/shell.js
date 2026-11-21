@@ -204,6 +204,14 @@ const Shell = {
   /* ------------------------------------------------ açılış */
   async boot() {
     const status = t => { $('#bootStatus').textContent = t; };
+    // Açılış ekranı (logo) ekrana çizilince oturumun koyduğu düz renkli örtüyü kaldır (tyros-cover).
+    // Örtü, pencere ilk açıldığında içi çizilmeden görünen bozuk görüntüyü saklıyor.
+    (async () => {
+      const logo = $('.boot-logo');
+      if (logo && logo.decode) await Promise.race([logo.decode().catch(() => {}), new Promise(r => setTimeout(r, 500))]);
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      setTimeout(() => API.post('/api/exec', { cmd: 'touch "$HOME/.cache/tyros/ui-ready"' }).catch(() => {}), 100);
+    })();
     status('Sistem köprüsüne bağlanılıyor');
     for (let i = 0; i < 40; i++) {
       try { await API.get('/api/ping'); API.online = true; break; } catch { await new Promise(r => setTimeout(r, 500)); }
