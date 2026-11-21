@@ -920,14 +920,19 @@ BUILTIN.store.launch = () => {
       const net = await tryRun('timeout 6 getent hosts deb.debian.org >/dev/null 2>&1 && echo ok', 10);
       if (!net.includes('ok')) { notify('İnternet bağlantısı yok', 'Uygulama indirmek için bir ağa bağlanıp tekrar dene.', true, 7000); restore(); return; }
     }
-    status.hidden = false; status.replaceChildren(h('div', { class: 'sto-spin' }), h('div', { class: 'sto-st' }, h('b', {}, title + '…'), h('pre', {}, 'Hazırlanıyor…')));
+    // Üstte anlaşılır aşama, altında terminaldeki gibi canlı işlem kaydı
+    const stageEl = h('div', { class: 'sto-stage' }, 'Hazırlanıyor…');
+    const logEl = h('pre', { class: 'sto-log' }, '');
+    status.hidden = false; status.replaceChildren(h('div', { class: 'sto-spin' }), h('div', { class: 'sto-st' }, h('b', {}, title + '…'), stageEl, logEl));
     try {
       await run(`(sudo -n /usr/local/sbin/tyros-pkg ${action} ${pkg ? q(pkg) : ''} >${log} 2>&1; echo $? >${rc}) >/dev/null 2>&1 &`);
     } catch (e) { status.hidden = true; return fail(e); }
     const poll = setInterval(async () => {
-      const out = await tryRun(`tail -n 4 ${log} 2>/dev/null; echo "@@"; cat ${rc} 2>/dev/null`);
+      const out = await tryRun(`tail -n 8 ${log} 2>/dev/null; echo "@@"; cat ${rc} 2>/dev/null`);
       const [txt, code] = out.split('@@');
-      $('pre', status).textContent = stage(txt);
+      stageEl.textContent = stage(txt);
+      logEl.textContent = (txt || '').replace(/\r/g, '\n').split('\n').filter(l => l.trim()).slice(-8).join('\n');
+      logEl.scrollTop = logEl.scrollHeight;
       if (code && code.trim() !== '') {
         clearInterval(poll);
         const full = code.trim() === '0' ? '' : await tryRun(`tail -n 80 ${log} 2>/dev/null`);

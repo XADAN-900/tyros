@@ -223,15 +223,18 @@ const TyOSK = {
     return el.tagName === 'IFRAME' && /\/term\//.test(el.getAttribute('src') || '');
   },
   dbus(m) { return `dbus-send --session --print-reply --reply-timeout=2000 --type=method_call --dest=org.onboard.Onboard /org/onboard/Onboard/Keyboard org.onboard.Onboard.Keyboard.${m} >/dev/null 2>&1`; },
+  // Açıksa göster, kapalıysa başlat (gizlenmiş klavye hemen geri gelir)
+  showCmd() { return `command -v onboard >/dev/null || exit 0; if pgrep -u "$(id -u)" -x onboard >/dev/null; then ${this.dbus('Show')} || { pkill -u "$(id -u)" -x onboard; sleep 0.3; (setsid -f onboard >/dev/null 2>&1 &); }; else (setsid -f onboard >/dev/null 2>&1 &); fi; sleep 0.8`; },
+  hideCmd() { return `${this.dbus('Hide')} || pkill -u "$(id -u)" -x onboard; true`; },
+  refreshTile() { if (!$('#quickPanel').hidden) setTimeout(() => QP.state().then(() => QP.renderTiles()).catch(() => {}), 1200); },
   show() {
     this.auto = true;
-    // Açıksa göster, kapalıysa başlat
-    API.post('/api/exec', { cmd: `command -v onboard >/dev/null || exit 0; if pgrep -u "$(id -u)" -x onboard >/dev/null; then ${this.dbus('Show')} || { pkill -u "$(id -u)" -x onboard; sleep 0.3; (setsid -f onboard >/dev/null 2>&1 &); }; else (setsid -f onboard >/dev/null 2>&1 &); fi`, timeout: 10 }).catch(() => {});
+    API.post('/api/exec', { cmd: this.showCmd(), timeout: 10 }).catch(() => {}).finally(() => this.refreshTile());
   },
   hide() {
     if (!this.auto) return;                 // elle açılan klavyeye dokunma
     this.auto = false;
-    API.post('/api/exec', { cmd: `${this.dbus('Hide')} || pkill -u "$(id -u)" -x onboard; true`, timeout: 10 }).catch(() => {});
+    API.post('/api/exec', { cmd: this.hideCmd(), timeout: 10 }).catch(() => {}).finally(() => this.refreshTile());
   },
 };
 window.TyOSK = TyOSK;
@@ -340,7 +343,7 @@ const QP = {
       echo "bt=$(timeout 2 bluetoothctl show 2>/dev/null | awk '/Powered:/{print $2; exit}')"
       echo "rf=$(rfkill -n -o SOFT 2>/dev/null | sort -u | tr '\\n' ' ')"
       echo "hot=$(timeout 3 nmcli -t -f NAME con show --active 2>/dev/null | grep -cx TyrOS-Hotspot)"
-      echo "osk=$(pgrep -u "$(id -u)" -x onboard >/dev/null && echo 1)"
+      echo "osk=$(pgrep -u "$(id -u)" -x onboard >/dev/null && { xdotool search --onlyvisible --class '[Oo]nboard' || xdotool search --onlyvisible --name '^Onboard'; } >/dev/null 2>&1 && echo 1)"
       echo "oskok=$(command -v onboard >/dev/null && echo 1)"
     `, 15), API.get('/api/netstate').catch(() => ({}))]);
     const s = {};
@@ -400,15 +403,22 @@ const QP = {
     return t;
   },
 
-  renderTiles() {
-    const s = this.st, d = Settings.data;
+  renderTiles(view) {
+    const s = view || this.st, d = Settings.data;
     const settings = k => BUILTIN.settings.launch(k);
-    const busy = async (fn) => { try { await fn(); } catch (e) { fail(e); } await this.state(); this.renderTiles(); Shell.refreshTray?.(); };
+    // Düğmeye basınca görünüm HEMEN değişir; ardından gerçek durum sistemden okunup doğrulanır
+    const busy = async (fn, flip) => {
+      // Gerçek durum (this.st) komut bitene kadar değişmez; sadece görünüm için kopyası çevrilir
+      if (flip) { const v = { ...this.st }; flip(v); this.renderTiles(v); }
+      try { await fn(); } catch (e) { fail(e); }
+      await this.state(); this.renderTiles(); Shell.refreshTray?.();
+      setTimeout(async () => { if (!$('#quickPanel').hidden) { await this.state(); this.renderTiles(); } }, 1800);
+    };
     const tiles = [];
     if (s.wifidev) {
       tiles.push(this.tile({ icon: 'wifi', label: 'Wi-Fi', on: s.wifiOn && !s.plane,
         sub: !s.wifiOn ? 'Kapalı' : s.wifiBusy ? 'Bağlanıyor…' : s.ssid || (s.wiredOn ? 'Kablolu bağlı' : 'Bağlı değil'),
-        onToggle: () => busy(() => ex(`nmcli radio wifi ${s.wifiOn ? 'off' : 'on'}`)), onMore: () => settings('net') }));
+        onToggle: () => busy(() => ex(`nmcli radio wifi ${s.wifiOn ? 'off' : 'on'}`), t => { t.wifiOn = !t.wifiOn; t.ssid = ''; }), onMore: () => settings('net') }));
     } else {
       tiles.push(this.tile({ icon: s.wiredOn ? 'wired' : 'nonet', label: s.wiredOn ? 'Ethernet' : 'Ağ', on: s.wiredOn,
         sub: s.wiredOn ? 'Bağlı' : 'Bağlı değil', onToggle: () => { Shell.closePopups(); settings('net'); }, onMore: () => settings('net') }));
@@ -418,22 +428,23 @@ const QP = {
       onToggle: () => busy(async () => {
         if (!s.btOn) await ex('rfkill unblock bluetooth 2>/dev/null; sleep 1');
         await ex(`timeout 5 bluetoothctl power ${s.btOn ? 'off' : 'on'}`);
-      }), onMore: () => settings('bluetooth') }));
+      }, t => { t.btOn = !t.btOn; }), onMore: () => settings('bluetooth') }));
     tiles.push(this.tile({ icon: 'plane', label: 'Uçak modu', on: s.plane, sub: s.plane ? 'Açık' : 'Kapalı',
       onToggle: () => busy(async () => {
         if (s.plane) { await ex('rfkill unblock all 2>/dev/null; nmcli radio all on 2>/dev/null'); Settings.set({ airplane: false }); }
         else { await ex('nmcli radio all off 2>/dev/null; rfkill block all 2>/dev/null'); Settings.set({ airplane: true }); }
-      }) }));
+      }, t => { t.plane = !t.plane; }) }));
     tiles.push(this.tile({ icon: 'moon', label: 'Gece ışığı', on: !!d.nightLight, sub: d.nightLight ? 'Açık' : 'Kapalı',
-      onToggle: () => busy(async () => { await Settings.set({ nightLight: !d.nightLight }); await Display.apply(); }) }));
+      onToggle: () => { const v = !d.nightLight; busy(async () => { await Settings.set({ nightLight: v }); await Display.apply(); }, () => { d.nightLight = v; }); } }));
     tiles.push(this.tile({ icon: 'bell', label: 'Rahatsız etme', on: !!d.quietNotify, sub: d.quietNotify ? 'Açık' : 'Kapalı',
-      onToggle: () => busy(() => Settings.set({ quietNotify: !d.quietNotify })), onMore: () => settings('notify') }));
+      onToggle: () => { const v = !d.quietNotify; busy(() => Settings.set({ quietNotify: v }), () => { d.quietNotify = v; }); }, onMore: () => settings('notify') }));
     tiles.push(this.tile({ icon: 'keyboard', label: 'Ekran klavyesi', on: s.osk, disabled: !s.oskOk, sub: !s.oskOk ? 'Yüklü değil' : s.osk ? 'Açık' : 'Kapalı',
-      onToggle: () => busy(() => ex(s.osk ? 'pkill -u "$(id -u)" -x onboard' : '(setsid -f onboard >/dev/null 2>&1 &); sleep 1')) }));
+      onToggle: () => { TyOSK.auto = false; busy(() => ex(s.osk ? TyOSK.hideCmd() : TyOSK.showCmd()), t => { t.osk = !t.osk; }); } }));
     tiles.push(this.tile({ icon: 'hotspot', label: 'Etkin nokta', on: s.hotOn, disabled: !s.wifidev,
       sub: !s.wifidev ? 'Wi-Fi yok' : s.hotOn ? 'Açık' : 'Kapalı',
       onToggle: () => busy(async () => {
         if (s.hotOn) { await ex('nmcli connection down TyrOS-Hotspot'); return; }
+        this.renderTiles({ ...this.st, hotOn: true });
         const pass = 'tyros' + Math.random().toString().slice(2, 8);
         const r = await ex(`LC_ALL=C.UTF-8 nmcli device wifi hotspot ifname ${sh(s.wifidev)} con-name TyrOS-Hotspot ssid TyrOS password ${pass} 2>&1`, 30);
         if (r.code !== 0) throw new Error('Wi-Fi kartın etkin noktayı desteklemiyor olabilir.');
