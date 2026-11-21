@@ -21,8 +21,11 @@ import shlex
 import shutil
 import signal
 import socket
+import struct
 import subprocess
+import tarfile
 import threading
+import zlib
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -270,9 +273,112 @@ ICON_ROOTS = [os.path.join(HOME, ".local/share/icons"), "/usr/share/icons/hicolo
 def icon_score(path):
     if path.endswith(".svg"):
         return 1000
+    if path.endswith(".xpm"):
+        return -1000                                 # eski biçim: yalnızca başka seçenek yoksa
     m = re.search(r"/(\d+)x\d+/", path)
     size = int(m.group(1)) if m else 32
     return 900 - abs(128 - size) if size >= 32 else size
+
+
+# ---- XPM: tarayıcı bu eski resim biçimini gösteremez; PNG'ye çevrilir (yalnızca standart kütüphane)
+_XPM_NAMES = {"black": (0, 0, 0), "white": (255, 255, 255), "red": (255, 0, 0), "green": (0, 128, 0),
+              "blue": (0, 0, 255), "yellow": (255, 255, 0), "gray": (190, 190, 190), "grey": (190, 190, 190),
+              "orange": (255, 165, 0), "brown": (165, 42, 42), "cyan": (0, 255, 255), "magenta": (255, 0, 255)}
+
+
+def _xpm_color(spec):
+    spec = spec.strip()
+    if spec.lower() == "none":
+        return (0, 0, 0, 0)
+    if spec.startswith("#"):
+        h = spec[1:]
+        n = len(h) // 3
+        if n == 0:
+            return (0, 0, 0, 255)
+        r, g, b = (int(h[i * n:(i + 1) * n], 16) for i in range(3))
+        if n > 2:                                    # #RRRRGGGGBBBB
+            r, g, b = r >> (4 * (n - 2)), g >> (4 * (n - 2)), b >> (4 * (n - 2))
+        elif n == 1:
+            r, g, b = r * 17, g * 17, b * 17
+        return (r, g, b, 255)
+    low = spec.lower().replace(" ", "")
+    m = re.match(r"gr[ae]y(\d+)$", low)
+    if m:
+        v = round(int(m.group(1)) * 2.55)
+        return (v, v, v, 255)
+    return _XPM_NAMES.get(low, (128, 128, 128)) + (255,)
+
+
+def xpm_to_png(path):
+    """XPM dosyasını PNG baytlarına çevir; anlaşılamazsa None."""
+    try:
+        txt = read(path)
+        rows = re.findall(r'"((?:[^"\\]|\\.)*)"', txt)
+        w, h, nc, cpp = (int(x) for x in rows[0].split()[:4])
+        colors = {}
+        for line in rows[1:1 + nc]:
+            key, rest = line[:cpp], line[cpp:]
+            m = re.search(r"(?:^|\s)c\s+(.+?)(?:\s+(?:m|g4|g|s)\s|$)", rest)
+            colors[key] = _xpm_color(m.group(1) if m else "None")
+        raw = bytearray()
+        for y in range(h):
+            line = rows[1 + nc + y]
+            raw.append(0)
+            for x in range(w):
+                raw.extend(colors.get(line[x * cpp:(x + 1) * cpp], (0, 0, 0, 0)))
+        def chunk(tag, data):
+            c = struct.pack(">I", len(data)) + tag + data
+            return c + struct.pack(">I", zlib.crc32(tag + data) & 0xffffffff)
+        return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
+                + chunk(b"IDAT", zlib.compress(bytes(raw), 6)) + chunk(b"IEND", b""))
+    except Exception:
+        return None
+
+
+# ---- Mağazadaki henüz kurulmamış uygulamaların logoları: Debian'ın uygulama simgesi arşivinden
+#      ("Listeyi güncelle" ile inen *_dep11_icons-64x64.tar.gz). Kurulu olmayan programın simgesi sistemde yoktur.
+_dep11 = {"sig": None, "idx": {}}
+_dep11_lock = threading.Lock()
+
+
+def dep11_index():
+    import glob
+    files = sorted(glob.glob("/var/lib/apt/lists/*_dep11_icons-64x64.tar*"))
+    sig = tuple((f, os.path.getmtime(f)) for f in files if os.path.exists(f))
+    with _dep11_lock:
+        if sig != _dep11["sig"]:
+            idx = {}
+            for f in files:
+                try:
+                    with tarfile.open(f) as t:
+                        for m in t:
+                            if m.isfile() and m.name.endswith(".png"):
+                                idx.setdefault(os.path.basename(m.name).split("_", 1)[0], (f, m.name))
+                except Exception:
+                    pass
+            _dep11.update(sig=sig, idx=idx)
+        return _dep11["idx"]
+
+
+def dep11_icon(pkg):
+    if not PKG_RE.match(pkg or ""):
+        return None
+    out = os.path.join(HOME, ".cache/tyros/appicons", pkg + ".png")
+    if os.path.isfile(out):
+        return out
+    hit = dep11_index().get(pkg)
+    if not hit:
+        return None
+    try:
+        with tarfile.open(hit[0]) as t:
+            data = t.extractfile(hit[1]).read()
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(out + ".tmp", "wb") as f:
+            f.write(data)
+        os.replace(out + ".tmp", out)
+        return out
+    except Exception:
+        return None
 
 
 def build_icon_index():
@@ -1000,9 +1106,15 @@ class Handler(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in parse_qs(url.query).items()}
 
         if url.path == "/api/icon":
-            p = find_icon(q.get("name", ""))
+            name = q.get("name", "")
+            p = find_icon(name) or dep11_icon(name)
             if not p:
                 return self.send(404, b"", "text/plain")
+            if p.endswith(".xpm"):
+                png = xpm_to_png(p)
+                if not png:
+                    return self.send(404, b"", "text/plain")
+                return self.send(200, png, "image/png", {"Cache-Control": "max-age=86400"})
             with open(p, "rb") as f:
                 ctype = "image/svg+xml" if p.endswith(".svg") else (mimetypes.guess_type(p)[0] or "image/png")
                 return self.send(200, f.read(), ctype, {"Cache-Control": "max-age=86400"})
