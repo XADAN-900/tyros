@@ -6,13 +6,15 @@ ACTION="$1"; NAME="$2"
 valid() { printf '%s' "$1" | grep -Eq '^[a-z0-9][a-z0-9+.-]{0,100}$'; }
 # Çıktı satır satır yazılsın (Uygulama Mağazası işlemi terminaldeki gibi canlı göstersin; dosyaya yazınca toplu gelmesin)
 APT="apt-get"; command -v stdbuf >/dev/null 2>&1 && APT="stdbuf -oL -eL apt-get"
+# İndirilen .deb dosyaları kurulumdan sonra silinir: canlı USB oturumunda bunlar RAM'de duruyor ve
+# oyun gibi büyük uygulamalarda yüzlerce MB belleği boşuna tutuyordu (kurulu sistemde de disk yer kazanır)
 lists_empty() { ! ls /var/lib/apt/lists/ 2>/dev/null | grep -q '_Packages'; }
 case "$ACTION" in
   update) exec $APT update ;;
   install)
     valid "$NAME" || { echo "Geçersiz paket adı" >&2; exit 2; }
     if lists_empty; then $APT update; fi
-    exec $APT install -y --no-install-recommends -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold -- "$NAME" ;;
+    exec $APT install -y --no-install-recommends -o APT::Keep-Downloaded-Packages=false -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold -- "$NAME" ;;
   remove)
     valid "$NAME" || { echo "Geçersiz paket adı" >&2; exit 2; }
     case "$NAME" in apache2|apache2-*|chromium|chromium-*|openbox|lightdm|xserver-xorg*|systemd*|sudo|apt|dpkg|libc6|linux-image-*|network-manager|plymouth*|python3|bash)
@@ -21,7 +23,7 @@ case "$ACTION" in
   clean) apt-get clean; exec apt-get autoremove -y ;;
   upgrade)
     $APT update
-    exec $APT -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade --with-new-pkgs ;;
+    exec $APT -y -o APT::Keep-Downloaded-Packages=false -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade --with-new-pkgs ;;
   firewall-on)  ufw default deny incoming >/dev/null; ufw default allow outgoing >/dev/null; exec ufw --force enable ;;
   firewall-off) exec ufw disable ;;
   firewall-status) ufw status 2>/dev/null | head -n1 ;;
